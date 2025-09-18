@@ -25,4 +25,6 @@ export interface Question {
   fileUrl?: string;
   createdAt?: FieldValue | Timestamp;
   uploaderId?: string;
+  prevQuestionId?: string | null;
+  nextQuestionId?: string | null;
 }

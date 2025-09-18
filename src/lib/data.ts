@@ -1,7 +1,7 @@
 import { db } from '@/lib/firebase-client';
 import type { Question } from './types';
 import { institutions as staticInstitutions } from './institutions';
-import { collection, query, orderBy, getDocs, where, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, where, limit, doc, getDoc, startAfter } from 'firebase/firestore';
 
 export const institutions = staticInstitutions;
 
@@ -30,10 +30,40 @@ export const getApprovedQuestions = async (): Promise<Question[]> => {
 export const getQuestionById = async (id: string): Promise<Question | null> => {
   const docRef = doc(db, 'questions', id);
   const docSnap = await getDoc(docRef);
+
   if (!docSnap.exists()) {
     return null;
   }
-  return { id: docSnap.id, ...docSnap.data() } as Question;
+
+  const question = { id: docSnap.id, ...docSnap.data() } as Question;
+
+  // Find the next question
+  const nextQuery = query(
+    collection(db, 'questions'),
+    where('status', '==', 'approved'),
+    orderBy('createdAt', 'asc'),
+    startAfter(docSnap),
+    limit(1)
+  );
+  const nextSnapshot = await getDocs(nextQuery);
+  const nextQuestionId = nextSnapshot.empty ? null : nextSnapshot.docs[0].id;
+
+  // Find the previous question
+  const prevQuery = query(
+    collection(db, 'questions'),
+    where('status', '==', 'approved'),
+    orderBy('createdAt', 'desc'),
+    startAfter(docSnap),
+    limit(1)
+  );
+  const prevSnapshot = await getDocs(prevQuery);
+  const prevQuestionId = prevSnapshot.empty ? null : prevSnapshot.docs[0].id;
+
+  return {
+    ...question,
+    nextQuestionId,
+    prevQuestionId,
+  };
 };
 
 export const getRelatedQuestions = async (currentQuestion: Question): Promise<Question[]> => {

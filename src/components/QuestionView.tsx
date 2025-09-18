@@ -11,10 +11,7 @@ import Link from 'next/link';
 export default function QuestionView({ question }: { question: Question }) {
   const [showAnswer, setShowAnswer] = useState(false);
   
-  // Dummy prev/next IDs for now. In a real app, this would be based on search context or chronological order.
-  const currentId = parseInt(question.id);
-  const prevId = currentId > 1 ? (currentId - 1).toString() : null;
-  const nextId = currentId < 8 ? (currentId + 1).toString() : null; // Updated to max 8
+  const { prevQuestionId, nextQuestionId } = question;
 
   return (
     <div className="space-y-6">
@@ -81,8 +78,8 @@ export default function QuestionView({ question }: { question: Question }) {
                 )}
             </CardContent>
             <CardFooter className="flex justify-between border-t pt-6">
-                {prevId ? <Button asChild variant="ghost"><Link href={`/questions/${prevId}`}><ArrowLeft className="mr-2 h-4 w-4" /> Previous</Link></Button> : <div/>}
-                {nextId ? <Button asChild variant="ghost"><Link href={`/questions/${nextId}`}>Next <ArrowRight className="ml-2 h-4 w-4" /></Link></Button> : <div/>}
+                {prevQuestionId ? <Button asChild variant="ghost"><Link href={`/questions/${prevQuestionId}`}><ArrowLeft className="mr-2 h-4 w-4" /> Previous</Link></Button> : <div/>}
+                {nextQuestionId ? <Button asChild variant="ghost"><Link href={`/questions/${nextQuestionId}`}>Next <ArrowRight className="ml-2 h-4 w-4" /></Link></Button> : <div/>}
             </CardFooter>
         </Card>
     </div>
