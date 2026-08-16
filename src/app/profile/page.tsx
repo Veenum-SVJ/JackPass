@@ -46,11 +46,11 @@ export default function ProfilePage() {
     // This is a placeholder for fetching user-specific uploads
     useEffect(() => {
         const fetchUploads = async () => {
-          if (!user?.email) return; // We'll use email as a mock user ID
+          if (!user?.id) return; // We'll use id as a mock user ID
           setIsLoadingUploads(true);
           try {
             // Fetch from the new API route
-            const response = await fetch(`/api/users/${user.email}/uploads`);
+            const response = await fetch(`/api/users/${user.id}/uploads`);
             if (!response.ok) {
                 throw new Error('Failed to fetch user uploads');
             }
@@ -102,22 +102,22 @@ export default function ProfilePage() {
       <Card>
         <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-6">
             <ProfilePictureUpload
-                currentAvatar={user.avatar || ''}
+                currentAvatar={user.user_metadata?.avatar || ''}
                 onAvatarChange={(newAvatar) => updateUser({ avatar: newAvatar })}
-                userName={user.name}
+                userName={user.user_metadata?.name || 'User'}
             />
             <div className="text-center sm:text-left">
-                <h1 className="text-3xl font-bold font-headline">{user.name}</h1>
-                <p className="text-muted-foreground">{user.university}</p>
-                <p className="text-sm text-muted-foreground">{user.department} - {user.level} Level</p>
-                <p className="mt-2 max-w-xl">{user.bio}</p>
+                <h1 className="text-3xl font-bold font-headline">{user.user_metadata?.name || 'User'}</h1>
+                <p className="text-muted-foreground">{user.user_metadata?.university || 'University not set'}</p>
+                <p className="text-sm text-muted-foreground">{user.user_metadata?.department || 'Department not set'} - {user.user_metadata?.level || 'N/A'} Level</p>
+                <p className="mt-2 max-w-xl">{user.user_metadata?.bio || 'No bio provided'}</p>
             </div>
             <div className="ml-auto hidden sm:block">
               <EditProfileDialog user={user} onSave={updateUser} />
             </div>
         </CardContent>
       </Card>
-      
+
       <Tabs defaultValue="activity" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="activity">Activity</TabsTrigger>

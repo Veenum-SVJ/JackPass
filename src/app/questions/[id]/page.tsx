@@ -3,9 +3,7 @@ import QuestionView from '@/components/QuestionView';
 import { notFound } from 'next/navigation';
 import QuestionCard from '@/components/QuestionCard';
 import type { Metadata } from 'next';
-import { db } from '@/lib/firebase-client';
 import type { Question } from '@/lib/types';
-import { collection, limit, getDocs, query } from 'firebase/firestore';
 
 type Props = {
   params: { id: string }
@@ -21,7 +19,7 @@ async function getQuestion(id: string) {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const question = await getQuestion(params.id);
- 
+
   if (!question) {
     return {
       title: 'Question Not Found | JackPass',
@@ -34,18 +32,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export async function generateStaticParams() {
-  const q = query(collection(db, 'questions'), limit(20));
-  const snapshot = await getDocs(q);
-  const paths = snapshot.docs.map((doc) => ({
-    id: doc.id,
-  }));
-  return paths;
-}
-
 export default async function QuestionPage({ params }: { params: { id: string } }) {
   const question = await getQuestion(params.id);
-  
+
   if (!question) {
     notFound();
   }

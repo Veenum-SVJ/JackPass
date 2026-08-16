@@ -5,7 +5,7 @@ import { useState, type ChangeEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { extractQuestionMetadata } from '@/ai/flows/extract-question-metadata';
+import { extractQuestionMetadataFlow } from '@/ai/flows/extract-question-metadata';
 import { processQuestionDocument } from '@/ai/flows/process-question-document';
 import { Button } from '@/components/ui/button';
 import {
@@ -137,17 +137,12 @@ export function UploadDialog() {
         const dataUri = reader.result as string;
 
         try {
-            if (file.type.startsWith('image/')) {
-                const { institutionName, courseName } = await extractQuestionMetadata({ photoDataUri: dataUri });
-                 if (institutionName) form.setValue('institution', institutionName, { shouldValidate: true });
-                 if (courseName) form.setValue('course', courseName, { shouldValidate: true });
-            } else if (file.type === 'application/pdf') {
-                const result = await processQuestionDocument({ fileUrl: dataUri });
-                if (result.institutionName) form.setValue('institution', result.institutionName, { shouldValidate: true });
-                if (result.courseName) form.setValue('course', result.courseName, { shouldValidate: true });
-                if (result.examYear) form.setValue('year', result.examYear, { shouldValidate: true });
-                if (result.semester) form.setValue('semester', result.semester, { shouldValidate: true });
-            }
+            // Use processQuestionDocument for both images and PDFs in preview
+            const result = await processQuestionDocument({ fileUrl: dataUri });
+            if (result.institutionName) form.setValue('institution', result.institutionName, { shouldValidate: true });
+            if (result.courseName) form.setValue('course', result.courseName, { shouldValidate: true });
+            if (result.examYear) form.setValue('year', result.examYear, { shouldValidate: true });
+            if (result.semester) form.setValue('semester', result.semester, { shouldValidate: true });
             toast({
                 title: 'Metadata Extracted!',
                 description: "We've pre-filled the form for you. Please review and submit.",
@@ -252,7 +247,7 @@ export function UploadDialog() {
     formData.append('course', data.course);
     formData.append('year', String(data.year));
     formData.append('semester', data.semester);
-    formData.append('uploaderId', user.email); // Add user's email as their ID
+    formData.append('uploaderId', user.id); // Add user's Supabase ID
     
     if (data.questionFiles) {
         Array.from(data.questionFiles).forEach(file => {

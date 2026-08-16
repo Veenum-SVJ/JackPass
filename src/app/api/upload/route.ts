@@ -1,144 +1,159 @@
 import { NextResponse } from 'next/server';
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import type { Question } from '@/lib/types';
-
-// Simple file-based storage for questions
-const QUESTIONS_FILE = join(process.cwd(), 'data', 'questions.json');
-
-// Ensure data directory exists
-const ensureDataDir = () => {
-  const dataDir = join(process.cwd(), 'data');
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
-  }
-};
-
-// Load questions from file
-const loadQuestions = (): Question[] => {
-  try {
-    ensureDataDir();
-    if (existsSync(QUESTIONS_FILE)) {
-      const data = readFileSync(QUESTIONS_FILE, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error('Error loading questions:', error);
-  }
-  return [];
-};
-
-// Save questions to file
-const saveQuestions = (questions: Question[]) => {
-  try {
-    ensureDataDir();
-    writeFileSync(QUESTIONS_FILE, JSON.stringify(questions, null, 2));
-  } catch (error) {
-    console.error('Error saving questions:', error);
-  }
-};
+import { processQuestionUpload } from '@/lib/upload';
+import { getUploadStatus } from '@/lib/upload';
 
 export async function POST(request: Request) {
   try {
-    console.log('Upload API called - starting to process request');
-    
-    // Try to parse FormData without strict content-type checking
-    let formData;
-    try {
-      formData = await request.formData();
-    } catch (error) {
-      console.error('FormData parsing failed:', error);
+    // Authenticate user - extract token from header
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Failed to parse form data. Please try again.' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
-    
-    console.log('FormData received, extracting fields...');
-    
-    // Extract form fields with better error handling
-    const institution = formData.get('institution');
-    const course = formData.get('course');
-    const year = formData.get('year');
-    const semester = formData.get('semester');
-    const uploaderId = formData.get('uploaderId');
-    const questionFiles = formData.getAll('questionFiles');
 
-    console.log('Raw form data:', {
-      institution: typeof institution,
-      course: typeof course,
-      year: typeof year,
-      semester: typeof semester,
-      uploaderId: typeof uploaderId,
-      fileCount: questionFiles.length
-    });
+    const token = authHeader.substring(7);
 
-    // Convert and validate
-    const institutionStr = institution?.toString() || '';
-    const courseStr = course?.toString() || '';
-    const yearNum = year ? Number(year) : 0;
-    const semesterStr = semester?.toString() as 'First' | 'Second' || 'First';
-    const uploaderIdStr = uploaderId?.toString() || '';
+    // Create a Supabase client with the user's token to get user info
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      }
+    );
 
-    console.log('Processed form data:', {
-      institution: institutionStr,
-      course: courseStr,
-      year: yearNum,
-      semester: semesterStr,
-      uploaderId: uploaderIdStr,
-      fileCount: questionFiles.length
-    });
-
-    // Validate required fields
-    if (!institutionStr || !courseStr || !yearNum || !semesterStr || !uploaderIdStr) {
-      console.log('Validation failed - missing required fields');
+    // Get user from the token
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
       return NextResponse.json(
-        { error: 'Missing required fields', details: { institution: !!institutionStr, course: !!courseStr, year: !!yearNum, semester: !!semesterStr, uploaderId: !!uploaderIdStr } },
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const title = formData.get('title') as string;
+    const institution = formData.get('institution') as string;
+    const course = formData.get('course') as string;
+    const year = parseInt(formData.get('year') as string, 10);
+    const semester = formData.get('semester') as 'First' | 'Second';
+    const type = formData.get('type') as 'Objective' | 'Theory' | 'Mixed';
+
+    if (!file) {
+      return NextResponse.json(
+        { error: 'No file provided' },
         { status: 400 }
       );
     }
 
-    console.log('Validation passed, creating question...');
+    // Validate file type and size
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    const maxSize = 10 * 1024 * 1024; // 10 MB
 
-    // Create new question
-    const newQuestion: Question = {
-      id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      title: `${courseStr.substring(0, 30)}... Past Question (${yearNum})`,
-      institution: institutionStr,
-      course: courseStr,
-      year: yearNum,
-      semester: semesterStr,
-      type: 'Mixed',
-      status: 'pending',
-      contentPreview: `A newly uploaded past question for ${courseStr} from ${yearNum}. Contains ${questionFiles.length} file(s).`,
-      fullContent: 'The full content would be extracted by a more advanced OCR/parser process. This is a placeholder.',
-      fileUrl: 'https://example.com/placeholder.pdf', // Placeholder
-      createdAt: new Date(),
-      uploaderId: uploaderIdStr
-    };
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json(
+        { error: 'Invalid file type. Only PDF and image files are allowed.' },
+        { status: 400 }
+      );
+    }
 
-    console.log('Question object created:', newQuestion);
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: 'File size exceeds 10 MB limit' },
+        { status: 400 }
+      );
+    }
 
-    // Load existing questions and add new one
-    const questions = loadQuestions();
-    console.log('Loaded existing questions:', questions.length);
-    
-    questions.push(newQuestion);
-    saveQuestions(questions);
-    console.log('Question saved successfully');
+    // Use the authenticated user's ID
+    const uploaderId = user.id;
 
-    console.log('Question uploaded successfully:', newQuestion.id);
-    
-    return NextResponse.json({ 
-      success: true, 
-      message: `Successfully added 1 new question for review.`,
-      question: newQuestion
+    // Process the upload
+    const result = await processQuestionUpload(file, uploaderId, {
+      title,
+      institution,
+      course: course || undefined,
+      year: year || undefined,
+      semester: semester || undefined,
+      type: type || undefined
     });
 
-  } catch (error) {
-    console.error('Upload API error:', error);
+    return NextResponse.json({
+      success: true,
+      uploadId: result.upload.id,
+      fileUrl: result.fileUrl,
+      ocrText: result.ocrText,
+      message: 'File uploaded and processed successfully'
+    });
+  } catch (error: any) {
+    console.error('Upload error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// Optional: GET endpoint to check upload status
+export async function GET(request: Request) {
+  try {
+    // Authenticate user - extract token from header
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.substring(7);
+
+    // Create a Supabase client with the user's token to get user info
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      }
+    );
+
+    // Get user from the token
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const uploadId = searchParams.get('id');
+
+    if (!uploadId) {
+      return NextResponse.json(
+        { error: 'Upload ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const upload = await getUploadStatus(uploadId);
+
+    return NextResponse.json({
+      success: true,
+      upload
+    });
+  } catch (error: any) {
+    console.error('Upload error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
       { status: 500 }
     );
   }

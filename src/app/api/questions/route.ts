@@ -1,40 +1,40 @@
 import { NextResponse } from 'next/server';
-import { readFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { createServerSupabase } from '@/lib/supabase-server';
 import type { Question } from '@/lib/types';
-
-// Simple file-based storage for questions
-const QUESTIONS_FILE = join(process.cwd(), 'data', 'questions.json');
-
-// Ensure data directory exists
-const ensureDataDir = () => {
-  const dataDir = join(process.cwd(), 'data');
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
-  }
-};
-
-// Load questions from file
-const loadQuestions = (): Question[] => {
-  try {
-    ensureDataDir();
-    if (existsSync(QUESTIONS_FILE)) {
-      const data = readFileSync(QUESTIONS_FILE, 'utf8');
-      const questions = JSON.parse(data);
-      // Filter to only show approved questions
-      return questions.filter((q: Question) => q.status === 'approved');
-    }
-  } catch (error) {
-    console.error('Error loading questions:', error);
-  }
-  return [];
-};
 
 export async function GET() {
   try {
-    const questions = loadQuestions();
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from('questions')
+      .select('*')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Map Supabase question to our Question type
+    const questions: Question[] = data.map((q: any) => ({
+      id: q.id,
+      title: q.title,
+      institution: q.institution,
+      course: q.course,
+      year: q.year,
+      semester: q.semester as 'First' | 'Second',
+      type: q.type as 'Objective' | 'Theory' | 'Mixed',
+      status: q.status as 'pending' | 'approved' | 'rejected',
+      contentPreview: q.content_preview,
+      fullContent: q.full_content,
+      answer: q.answer,
+      explanation: q.explanation,
+      fileUrl: q.file_url,
+      uploaderId: q.uploader_id,
+      createdAt: q.created_at,
+      updatedAt: q.updated_at,
+    }));
+
     return NextResponse.json(questions);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching questions:', error);
     return NextResponse.json(
       { error: 'Failed to fetch questions' },

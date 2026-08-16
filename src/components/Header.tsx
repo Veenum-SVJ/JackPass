@@ -24,7 +24,7 @@ const navLinks = [
 
 export default function Header() {
   const pathname = usePathname();
-  const { user, logout, online } = useAuth();
+  const { user, signOut, online } = useAuth();
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-sm border-b">
@@ -36,7 +36,7 @@ export default function Header() {
             </div>
             <span className="font-headline text-xl font-bold">JackPass</span>
           </Link>
-          
+
           <nav className="hidden md:flex items-center gap-6">
             {navLinks.map((link) => (
               <Link
@@ -63,24 +63,24 @@ export default function Header() {
                   {online ? 'Online' : 'Offline'}
                 </span>
               </div>
-              
+
               <Link href="/settings">
                 <Button variant="ghost" size="icon">
                   <Settings className="h-5 w-5" />
                   <span className="sr-only">Settings</span>
                 </Button>
               </Link>
-              
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="relative w-8 h-8 rounded-full overflow-hidden">
-                    {user.avatar && user.avatar !== 'https://placehold.co/128x128.png' ? (
+                    {user.user_metadata?.avatar && user.user_metadata.avatar !== 'https://placehold.co/128x128.png' ? (
                       <Image
-                        src={user.avatar}
-                        alt={user.name}
+                        src={user.user_metadata.avatar}
+                        alt={user.user_metadata.name || 'User'}
                         fill
                         className="object-cover"
-                        unoptimized={user.avatar.startsWith('blob:')}
+                        unoptimized={user.user_metadata.avatar.startsWith('blob:')}
                       />
                     ) : (
                       <User className="h-5 w-5" />
@@ -91,7 +91,7 @@ export default function Header() {
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user.name}</p>
+                      <p className="text-sm font-medium leading-none">{user.user_metadata.name || 'User'}</p>
                       <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
                     </div>
                   </DropdownMenuLabel>
@@ -109,7 +109,7 @@ export default function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout} className="cursor-pointer">
+                  <DropdownMenuItem onClick={signOut} className="cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
                     Log out
                   </DropdownMenuItem>

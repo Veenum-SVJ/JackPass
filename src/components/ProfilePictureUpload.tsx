@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { uploadProfilePicture } from '@/lib/hybrid-storage';
 import { Camera, Upload, X, User } from 'lucide-react';
 import Image from 'next/image';
 
@@ -22,7 +21,7 @@ export function ProfilePictureUpload({ currentAvatar, onAvatarChange, userName }
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const { user, online } = useAuth();
+  const { user } = useAuth();
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -59,20 +58,39 @@ export function ProfilePictureUpload({ currentAvatar, onAvatarChange, userName }
 
     setIsUploading(true);
     try {
-      // Upload using hybrid storage (Supabase + local fallback)
-      const downloadURL = await uploadProfilePicture(selectedFile, user.uid);
-      
+      // Upload to Supabase Storage
+      const supabase = (await import('@/lib/supabase')).createBrowserSupabase();
+
+      const fileName = `${user.id}_${Date.now()}_${selectedFile.name}`;
+      const { data, error } = await supabase.storage
+        .from('profile-pictures')
+        .upload(fileName, selectedFile);
+
+      if (error) throw error;
+
+      const { data: urlData } = supabase.storage
+        .from('profile-pictures')
+        .getPublicUrl(fileName);
+
+      if (!urlData.publicUrl) {
+        throw new Error('Failed to get public URL');
+      }
+
+      // Update user metadata
+      await supabase.auth.updateUser({
+        data: { avatar: urlData.publicUrl },
+      });
+
       // Update the avatar
-      onAvatarChange(downloadURL);
-      
+      onAvatarChange(urlData.publicUrl);
+
       // Clear preview and selected file
       setPreviewUrl(null);
       setSelectedFile(null);
-      
-      const storageType = online ? 'cloud' : 'local storage';
+
       toast({
         title: 'Profile picture updated!',
-        description: `Your new profile picture has been saved to ${storageType}.`,
+        description: 'Your new profile picture has been saved.',
       });
     } catch (error: any) {
       toast({
@@ -118,7 +136,7 @@ export function ProfilePictureUpload({ currentAvatar, onAvatarChange, userName }
               <User className="w-16 h-16 text-muted-foreground" />
             )}
           </div>
-          
+
           {/* Upload Overlay */}
           <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <Button
@@ -151,7 +169,7 @@ export function ProfilePictureUpload({ currentAvatar, onAvatarChange, userName }
             <Upload className="w-4 h-4" />
             Change Picture
           </Button>
-          
+
           {previewUrl && (
             <>
               <Button
@@ -161,7 +179,7 @@ export function ProfilePictureUpload({ currentAvatar, onAvatarChange, userName }
               >
                 {isUploading ? 'Uploading...' : 'Save Picture'}
               </Button>
-              
+
               <Button
                 onClick={handleRemove}
                 variant="outline"

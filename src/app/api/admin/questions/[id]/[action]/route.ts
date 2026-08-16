@@ -1,83 +1,53 @@
 import { NextResponse } from 'next/server';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
-import type { Question } from '@/lib/types';
-
-// Simple file-based storage for questions
-const QUESTIONS_FILE = join(process.cwd(), 'data', 'questions.json');
-
-// Ensure data directory exists
-const ensureDataDir = () => {
-  const dataDir = join(process.cwd(), 'data');
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
-  }
-};
-
-// Load questions from file
-const loadQuestions = (): Question[] => {
-  try {
-    ensureDataDir();
-    if (existsSync(QUESTIONS_FILE)) {
-      const data = readFileSync(QUESTIONS_FILE, 'utf8');
-      return JSON.parse(data);
-    }
-  } catch (error) {
-    console.error('Error loading questions:', error);
-  }
-  return [];
-};
-
-// Save questions to file
-const saveQuestions = (questions: Question[]) => {
-  try {
-    ensureDataDir();
-    writeFileSync(QUESTIONS_FILE, JSON.stringify(questions, null, 2));
-  } catch (error) {
-    console.error('Error saving questions:', error);
-  }
-};
+import { createServerSupabase } from '@/lib/supabase-server';
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; action: string }> }
 ) {
+  const { id, action } = await params;
   try {
-    const { id, action } = await params;
+    const supabase = createServerSupabase();
 
     if (!['approve', 'reject'].includes(action)) {
       return NextResponse.json(
-        { error: 'Invalid action. Must be "approve" or "reject".' },
+        { error: 'Invalid action. Use "approve" or "reject"' },
         { status: 400 }
       );
     }
 
-    const questions = loadQuestions();
-    const questionIndex = questions.findIndex(q => q.id === id);
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
 
-    if (questionIndex === -1) {
+    const { data, error } = await supabase
+      .from('questions')
+      .update({
+        status: newStatus,
+        approved_at: new Date().toISOString(),
+        approved_by: (await supabase.auth.getUser()).data.user?.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    if (!data) {
       return NextResponse.json(
-        { error: 'Question not found.' },
+        { error: 'Question not found' },
         { status: 404 }
       );
     }
 
-    // Update the question status
-    questions[questionIndex].status = action === 'approve' ? 'approved' : 'rejected';
-    saveQuestions(questions);
-
-    console.log(`Question ${id} ${action}d successfully`);
-
     return NextResponse.json({
       success: true,
-      message: `Question ${action}d successfully.`,
-      question: questions[questionIndex]
+      question: data,
+      message: `Question ${action}d successfully`
     });
-
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error ${action}ing question:`, error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error.message || `Failed to ${action} question` },
       { status: 500 }
     );
   }

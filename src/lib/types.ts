@@ -1,5 +1,3 @@
-import type { FieldValue, Timestamp } from 'firebase/firestore';
-
 export interface Course {
   name: string;
 }
@@ -23,6 +21,9 @@ export interface Question {
   answer?: string;
   explanation?: string;
   fileUrl?: string;
-  createdAt?: FieldValue | Timestamp;
+  fileName?: string;
+  fileType?: string;
   uploaderId?: string;
+  createdAt?: string; // ISO string from Supabase
+  updatedAt?: string;
 }
