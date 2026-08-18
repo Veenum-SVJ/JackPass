@@ -1,0 +1,10 @@
+# Firebase App Hosting configuration for the JackPass Vite app.
+# The Express server serves both the API and the built SPA.
+runConfig:
+  minInstances: 0
+  maxInstances: 1
+  cpu: 1
+  memoryMiB: 512
+
+buildCommand: npm run build
+runCommand: npm run start

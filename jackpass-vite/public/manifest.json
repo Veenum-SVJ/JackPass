@@ -1,0 +1,16 @@
+{
+  "name": "JackPass",
+  "short_name": "JackPass",
+  "description": "Academic question bank platform for Nigerian students",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAFD",
+  "theme_color": "#5B4BE0",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

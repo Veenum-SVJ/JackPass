@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 246 24% 98%; /* near-white with a violet hint */
+    --foreground: 250 32% 10%; /* deep violet-black */
+    --card: 0 0% 100%;
+    --card-foreground: 250 32% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 250 32% 10%;
+    --primary: 248 76% 50%; /* electric indigo-violet */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 246 22% 94%;
+    --secondary-foreground: 250 28% 16%;
+    --muted: 246 22% 94%;
+    --muted-foreground: 248 12% 42%;
+    --accent: 38 92% 50%; /* warm amber */
+    --accent-foreground: 250 40% 8%;
+    --destructive: 0 74% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 246 20% 89%;
+    --input: 246 20% 89%;
+    --ring: 248 76% 50%;
+    --radius: 0.75rem;
+    --chart-1: 248 76% 50%;
+    --chart-2: 38 92% 50%;
+    --chart-3: 262 70% 60%;
+    --chart-4: 174 62% 40%;
+    --chart-5: 16 85% 56%;
+    --sidebar-background: 0 0% 99%;
+    --sidebar-foreground: 250 28% 16%;
+    --sidebar-primary: 248 76% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 246 22% 94%;
+    --sidebar-accent-foreground: 250 28% 16%;
+    --sidebar-border: 246 20% 89%;
+    --sidebar-ring: 248 76% 50%;
+  }
+
+  .dark {
+    --background: 249 30% 8%; /* deep violet-near-black */
+    --foreground: 240 25% 96%;
+    --card: 249 28% 10%;
+    --card-foreground: 240 25% 96%;
+    --popover: 249 28% 10%;
+    --popover-foreground: 240 25% 96%;
+    --primary: 249 88% 66%; /* electric indigo, bright on dark */
+    --primary-foreground: 250 40% 8%;
+    --secondary: 249 22% 16%;
+    --secondary-foreground: 240 22% 92%;
+    --muted: 249 22% 16%;
+    --muted-foreground: 248 15% 66%;
+    --accent: 38 94% 56%;
+    --accent-foreground: 250 40% 8%;
+    --destructive: 0 66% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 249 22% 17%;
+    --input: 249 22% 17%;
+    --ring: 249 88% 66%;
+    --chart-1: 249 88% 66%;
+    --chart-2: 38 94% 56%;
+    --chart-3: 262 80% 70%;
+    --chart-4: 174 66% 50%;
+    --chart-5: 16 90% 62%;
+    --sidebar-background: 249 28% 10%;
+    --sidebar-foreground: 240 25% 96%;
+    --sidebar-primary: 249 88% 66%;
+    --sidebar-primary-foreground: 250 40% 8%;
+    --sidebar-accent: 249 22% 16%;
+    --sidebar-accent-foreground: 240 22% 92%;
+    --sidebar-border: 249 22% 17%;
+    --sidebar-ring: 249 88% 66%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+  /* Duolingo-style playful headings in Poppins, restrained body in Jakarta */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: theme('fontFamily.headline');
+    letter-spacing: -0.01em;
+  }
+  button {
+    font-family: theme('fontFamily.headline');
+  }
+}
+
+/* Adire-inspired geometric pattern (diamond grid + dots). Tint with
+   `text-{color}/{opacity}` — currentColor drives the stroke. */
+@layer utilities {
+  .bg-adire {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='currentColor' stroke-width='1.2'%3E%3Cpath d='M28 6 L50 28 L28 50 L6 28 Z'/%3E%3Ccircle cx='28' cy='28' r='2.4'/%3E%3Cpath d='M0 0 L9 9 M56 56 L47 47 M56 0 L47 9 M0 56 L9 47'/%3E%3C/g%3E%3C/svg%3E");
+    background-size: 56px 56px;
+  }
+
+  /* Subtle card lift on hover (Apple-restrained, not bouncy). */
+  .card-lift {
+    @apply transition-all duration-200 hover:-translate-y-1 hover:shadow-lg;
+  }
+
+  /* Shimmer loading skeletons — a soft highlight sweeps across the muted block.
+     Honors prefers-reduced-motion via the global animation guard. */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: calc(var(--radius) - 4px);
+    background-color: hsl(var(--muted));
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, hsl(var(--foreground) / 0.07), transparent);
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
