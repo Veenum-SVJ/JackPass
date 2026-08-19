@@ -99,6 +99,28 @@ paymentsRouter.get('/verify', async (req, res) => {
           paystack_response: verification.data,
         })
         .eq('id', reference);
+
+      // Also create/update subscription (in case webhook hasn't fired yet)
+      const { data: payment } = await supabase
+        .from('payments')
+        .select('user_id, tier')
+        .eq('id', reference)
+        .single();
+
+      if (payment) {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 30);
+
+        await supabase.from('subscriptions').upsert({
+          user_id: payment.user_id,
+          tier: payment.tier,
+          status: 'active',
+          payment_reference: reference,
+          starts_at: new Date().toISOString(),
+          expires_at: expiresAt.toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
     }
 
     res.json({

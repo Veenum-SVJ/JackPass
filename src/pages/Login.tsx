@@ -36,7 +36,9 @@ export default function LoginPage() {
     try {
       await signIn(data.email, data.password);
       toast({ title: 'Login Successful!', description: 'Welcome back!' });
-      navigate('/');
+      // Redirect to the page the user was trying to access, or home
+      const destination = (location.state as { from?: string })?.from || '/';
+      navigate(destination);
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Login Failed', description: error.message || 'Invalid email or password.' });
     } finally {
