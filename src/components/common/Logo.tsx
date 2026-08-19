@@ -33,7 +33,7 @@ export default function Logo({ className }: { className?: string }) {
   return (
     <span className={cn('flex items-center gap-1', className)}>
       <LogoMark className="h-8 w-8" />
-      <span className="font-headline text-xl font-bold tracking-tight">ckPass</span>
+      <span className="font-headline text-xl font-bold tracking-tight">ACKPASS</span>
     </span>
   );
 }
