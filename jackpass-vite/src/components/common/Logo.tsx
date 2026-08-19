@@ -31,9 +31,9 @@ export function LogoMark({ className }: { className?: string }) {
 
 export default function Logo({ className }: { className?: string }) {
   return (
-    <span className={cn('flex items-center gap-2.5', className)}>
+    <span className={cn('flex items-center gap-1', className)}>
       <LogoMark className="h-8 w-8" />
-      <span className="font-headline text-xl font-bold tracking-tight">JackPass</span>
+      <span className="font-headline text-xl font-bold tracking-tight">ckPass</span>
     </span>
   );
 }
