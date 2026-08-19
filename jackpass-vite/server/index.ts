@@ -12,6 +12,10 @@ import { paymentsRouter } from './routes/payments';
 import { usersRouter } from './routes/users';
 import { subscriptionRouter } from './routes/subscription';
 import { aiRouter } from './routes/ai';
+import { lecturersRouter } from './routes/lecturers';
+import { lecturerReviewsRouter } from './routes/lecturer-reviews';
+import { lecturerFlagsRouter } from './routes/lecturer-flags';
+import { lecturerPhotosRouter } from './routes/lecturer-photos';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, '../dist');
@@ -40,6 +44,10 @@ app.use('/api/payments', paymentsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/user/subscription', subscriptionRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/lecturers', lecturersRouter);
+app.use('/api/lecturer-reviews', lecturerReviewsRouter);
+app.use('/api/lecturer-flags', lecturerFlagsRouter);
+app.use('/api/lecturer-photos', lecturerPhotosRouter);
 
 // ── Static SPA (production) ───────────────────────────────────────────────────
 const servingStatic = fs.existsSync(distDir);

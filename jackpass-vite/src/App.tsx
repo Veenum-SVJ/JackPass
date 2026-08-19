@@ -19,6 +19,7 @@ const Community = lazy(() => import('./pages/Community'));
 const Support = lazy(() => import('./pages/Support'));
 const Settings = lazy(() => import('./pages/Settings'));
 const QuestionDetail = lazy(() => import('./pages/QuestionDetail'));
+const LecturerProfile = lazy(() => import('./pages/LecturerProfile'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
@@ -45,10 +46,11 @@ export default function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
                 <Route path="/billing" element={<RequireAuth><Billing /></RequireAuth>} />
-                <Route path="/community" element={<Community />} />
+                <Route path="/community" element={<RequireAuth><Community /></RequireAuth>} />
                 <Route path="/support" element={<Support />} />
                 <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-                <Route path="/questions/:id" element={<QuestionDetail />} />
+                <Route path="/questions/:id" element={<RequireAuth><QuestionDetail /></RequireAuth>} />
+                <Route path="/lecturer/:id" element={<RequireAuth><LecturerProfile /></RequireAuth>} />
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route
                   path="/admin"

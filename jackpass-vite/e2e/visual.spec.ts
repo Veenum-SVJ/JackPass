@@ -71,6 +71,7 @@ test.describe('visual regression', () => {
     test(`community page — ${theme}`, async ({ page }) => {
       await prepare(page, theme);
       await installMocks(page);
+      await loginAs(page);
       await snapshotPage(page, '/community', theme, 'community');
     });
 
@@ -111,6 +112,7 @@ test.describe('visual regression', () => {
     test(`question not found — ${theme}`, async ({ page }) => {
       await prepare(page, theme);
       await installMocks(page);
+      await loginAs(page);
       await snapshotPage(page, '/questions/00000000-0000-4000-8000-000000000000', theme, 'question-not-found');
     });
   }

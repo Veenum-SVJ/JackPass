@@ -1,4 +1,4 @@
-import type { Question } from './types';
+import type { Question, LecturerSummary } from './types';
 
 /**
  * A raw row as returned by Supabase (snake_case columns).
@@ -22,6 +22,8 @@ export interface QuestionRow {
   file_name?: string | null;
   file_type?: string | null;
   uploader_id?: string | null;
+  lecturer_id?: string | null;
+  lecturer?: LecturerSummary | null;
   created_at?: string | null;
   updated_at?: string | null;
   approved_at?: string | null;
@@ -50,6 +52,8 @@ export function mapQuestionRow(row: QuestionRow): Question {
     fileName: row.file_name ?? undefined,
     fileType: row.file_type ?? undefined,
     uploaderId: row.uploader_id ?? undefined,
+    lecturerId: row.lecturer_id ?? undefined,
+    lecturer: row.lecturer ?? undefined,
     createdAt: row.created_at ?? undefined,
     updatedAt: row.updated_at ?? undefined,
   };

@@ -73,7 +73,22 @@ questionsRouter.get('/:id', async (req, res) => {
       return;
     }
 
-    res.json(mapQuestionRow(data as QuestionRow));
+    const question = mapQuestionRow(data as QuestionRow);
+
+    // If the question has a lecturer, attach their profile summary
+    if (data.lecturer_id) {
+      const { data: lecturer } = await supabase
+        .from('lecturers')
+        .select('id, name, institution, department, rating_avg, review_count, photo_url')
+        .eq('id', data.lecturer_id)
+        .single();
+
+      if (lecturer) {
+        (question as any).lecturer = lecturer;
+      }
+    }
+
+    res.json(question);
   } catch (error) {
     console.error(`Failed to fetch question ${id}:`, error);
     res.status(500).json({ error: 'Internal Server Error' });

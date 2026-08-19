@@ -1,6 +1,18 @@
 import { test, expect } from '@playwright/test';
 import { installMocks, MOCK_QUESTIONS } from './helpers/mocks';
 
+/** Mocked login flow (see auth.spec.ts). */
+async function loginAs(page: import('@playwright/test').Page) {
+  await page.goto('/login');
+  await page.getByPlaceholder('m@example.com').fill('student@example.com');
+  await page.getByLabel('Password').fill('correct-password');
+  await page.getByRole('button', { name: 'Login', exact: true }).click();
+  await expect(page).toHaveURL('/');
+  await page.evaluate(() => {
+    document.querySelectorAll('[role="status"] button').forEach((b) => (b as HTMLButtonElement).click());
+  });
+}
+
 test.describe('browse', () => {
   test('renders the hero and question cards from the API', async ({ page }) => {
     await installMocks(page);
@@ -22,7 +34,7 @@ test.describe('browse', () => {
 
   test('links a question card to its detail page', async ({ page }) => {
     await installMocks(page);
-    await page.goto('/');
+    await loginAs(page);
 
     await page.getByText('Calculus I').click();
     // The detail endpoint is mocked as 404 → the not-found state renders
