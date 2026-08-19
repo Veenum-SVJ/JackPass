@@ -1,1 +1,0 @@
-export { QuestionReviewCard } from './QuestionReviewCard';

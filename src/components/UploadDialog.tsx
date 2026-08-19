@@ -1,12 +1,7 @@
-
-'use client';
-
 import { useState, type ChangeEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { extractQuestionMetadataFlow } from '@/ai/flows/extract-question-metadata';
-import { processQuestionDocument } from '@/ai/flows/process-question-document';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -28,28 +23,29 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-  } from '@/components/ui/select'
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UploadCloud, Paperclip, X } from 'lucide-react';
+import { Loader2, UploadCloud, Paperclip, X, CheckCircle2 } from 'lucide-react';
 import { institutions } from '@/lib/data';
 import { Combobox } from './ui/combobox';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
+import { useProcessDocument, useUploadQuestion } from '@/hooks/useUpload';
 
 const fileSchema = z.custom<FileList>()
-    .refine((files) => files && files.length > 0, 'At least one file is required.')
-    .refine((files) => Array.from(files).every(file => file.size <= 5000000), `Max file size is 5MB.`)
-    .refine(
-      (files) => Array.from(files).every(file => ['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)),
-      'Only .jpg, .png, and .pdf formats are supported.'
-    );
+  .refine((files) => files && files.length > 0, 'At least one file is required.')
+  .refine((files) => Array.from(files).every(file => file.size <= 5000000), 'Max file size is 5MB.')
+  .refine(
+    (files) => Array.from(files).every(file => ['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)),
+    'Only .jpg, .png, and .pdf formats are supported.'
+  );
 
 const formSchema = z.object({
   institution: z.string().min(1, 'Please select an institution.'),
@@ -57,12 +53,11 @@ const formSchema = z.object({
   year: z.coerce.number().min(1980, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year"),
   semester: z.enum(['First', 'Second']),
   questionFiles: fileSchema.optional(),
-  fileUrl: z.string().url("Please enter a valid URL.").optional(),
+  fileUrl: z.string().url("Please enter a valid URL.").or(z.literal('')).optional(),
 }).refine(data => data.questionFiles || data.fileUrl, {
-    message: "Either a file or a URL must be provided.",
-    path: ["questionFiles"],
+  message: "Either a file or a URL must be provided.",
+  path: ["questionFiles"],
 });
-
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -73,8 +68,9 @@ export function UploadDialog() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
-  const router = useRouter();
-
+  const navigate = useNavigate();
+  const processDocument = useProcessDocument();
+  const uploadQuestion = useUploadQuestion();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -111,10 +107,10 @@ export function UploadDialog() {
     // Process the first file for metadata
     const firstFile = allFiles[0];
     if (firstFile) {
-        processFile(firstFile);
+      processFile(firstFile);
     }
   };
-  
+
   const removeFile = (index: number) => {
     const newFiles = [...selectedFiles];
     newFiles.splice(index, 1);
@@ -123,221 +119,175 @@ export function UploadDialog() {
     const dataTransfer = new DataTransfer();
     newFiles.forEach(file => dataTransfer.items.add(file));
     form.setValue('questionFiles', newFiles.length > 0 ? dataTransfer.files : undefined, { shouldValidate: true });
-  }
+  };
 
   const processFile = async (file: File) => {
     setIsProcessing(true);
     toast({
-        title: 'Processing file...',
-        description: 'Extracting metadata with AI. This may take a moment.',
+      title: 'Processing file...',
+      description: 'Extracting metadata with AI. This may take a moment.',
     });
 
     const reader = new FileReader();
     reader.onloadend = async () => {
-        const dataUri = reader.result as string;
+      const dataUri = reader.result as string;
 
-        try {
-            // Use processQuestionDocument for both images and PDFs in preview
-            const result = await processQuestionDocument({ fileUrl: dataUri });
-            if (result.institutionName) form.setValue('institution', result.institutionName, { shouldValidate: true });
-            if (result.courseName) form.setValue('course', result.courseName, { shouldValidate: true });
-            if (result.examYear) form.setValue('year', result.examYear, { shouldValidate: true });
-            if (result.semester) form.setValue('semester', result.semester, { shouldValidate: true });
-            toast({
-                title: 'Metadata Extracted!',
-                description: "We've pre-filled the form for you. Please review and submit.",
-            });
-        } catch (error) {
-            console.error('Error processing file:', error);
-            toast({
-              variant: 'destructive',
-              title: 'Extraction Failed',
-              description: 'Could not extract metadata from the file. Please fill the form manually.',
-            });
-        } finally {
-            setIsProcessing(false);
-        }
+      try {
+        // Run the Genkit document flow on the server (keeps API keys off the client)
+        const result = await processDocument.mutateAsync({ fileUrl: dataUri });
+        if (result.institutionName) form.setValue('institution', result.institutionName, { shouldValidate: true });
+        if (result.courseName) form.setValue('course', result.courseName, { shouldValidate: true });
+        if (result.examYear) form.setValue('year', result.examYear, { shouldValidate: true });
+        if (result.semester) form.setValue('semester', result.semester, { shouldValidate: true });
+        toast({
+          title: 'Metadata Extracted!',
+          description: "We've pre-filled the form for you. Please review and submit.",
+        });
+      } catch (error) {
+        console.error('Error processing file:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Extraction Failed',
+          description: 'Could not extract metadata from the file. Please fill the form manually.',
+        });
+      } finally {
+        setIsProcessing(false);
+      }
     };
     reader.readAsDataURL(file);
   };
 
-
   const handleProcessLink = async () => {
     const linkValue = form.getValues('fileUrl');
     if (!linkValue) {
-        toast({
-            variant: 'destructive',
-            title: 'No Link Provided',
-            description: 'Please paste a Google Drive link to process.',
-        });
-        return;
+      toast({
+        variant: 'destructive',
+        title: 'No Link Provided',
+        description: 'Please paste a Google Drive link to process.',
+      });
+      return;
     }
 
     setIsProcessing(true);
     toast({
-        title: 'Processing document...',
-        description: 'This may take a moment.',
+      title: 'Processing document...',
+      description: 'This may take a moment.',
     });
     try {
-        const result = await processQuestionDocument({ fileUrl: linkValue });
-        form.setValue('institution', result.institutionName, { shouldValidate: true });
-        form.setValue('course', result.courseName, { shouldValidate: true });
-        form.setValue('year', result.examYear, { shouldValidate: true });
-        form.setValue('semester', result.semester, { shouldValidate: true });
-        form.setValue('fileUrl', linkValue, { shouldValidate: true });
-        form.setValue('questionFiles', undefined);
-        setSelectedFiles([]);
-        form.clearErrors('questionFiles');
-        toast({
-            title: 'Document Processed!',
-            description: "We've extracted the details from the document. Please review and submit.",
-        });
+      const result = await processDocument.mutateAsync({ fileUrl: linkValue });
+      form.setValue('institution', result.institutionName, { shouldValidate: true });
+      form.setValue('course', result.courseName, { shouldValidate: true });
+      form.setValue('year', result.examYear, { shouldValidate: true });
+      form.setValue('semester', result.semester, { shouldValidate: true });
+      form.setValue('fileUrl', linkValue, { shouldValidate: true });
+      form.setValue('questionFiles', undefined);
+      setSelectedFiles([]);
+      form.clearErrors('questionFiles');
+      toast({
+        title: 'Document Processed!',
+        description: "We've extracted the details from the document. Please review and submit.",
+      });
     } catch (error) {
-        console.error('Error processing document:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Processing Failed',
-            description: 'Could not process the document from the link. Please check the link or fill the form manually.',
-        });
+      console.error('Error processing document:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Processing Failed',
+        description: 'Could not process the document from the link. Please check the link or fill the form manually.',
+      });
     } finally {
-        setIsProcessing(false);
+      setIsProcessing(false);
     }
   };
 
-
   const onSubmit = async (data: FormValues) => {
-    console.log('Form submission started with data:', data);
-    console.log('Current user:', user);
-    
     if (!user) {
-        toast({
-            variant: 'destructive',
-            title: 'Not Logged In',
-            description: 'You must be logged in to upload questions. Please log in first.',
-        });
-        return;
+      toast({
+        variant: 'destructive',
+        title: 'Not Logged In',
+        description: 'You must be logged in to upload questions. Please log in first.',
+      });
+      return;
     }
 
-    console.log('User is logged in, proceeding with upload...');
-
-    // Validate required fields
     if (!data.institution || !data.course || !data.year || !data.semester) {
-        toast({
-            variant: 'destructive',
-            title: 'Missing Information',
-            description: 'Please fill in all required fields: Institution, Course, Year, and Semester.',
-        });
-        return;
+      toast({
+        variant: 'destructive',
+        title: 'Missing Information',
+        description: 'Please fill in all required fields: Institution, Course, Year, and Semester.',
+      });
+      return;
     }
 
-    // Validate that either files or URL is provided
     if (!data.questionFiles && !data.fileUrl) {
-        toast({
-            variant: 'destructive',
-            title: 'No Content Provided',
-            description: 'Please either upload files or provide a link to the question paper.',
-        });
-        return;
+      toast({
+        variant: 'destructive',
+        title: 'No Content Provided',
+        description: 'Please either upload files or provide a link to the question paper.',
+      });
+      return;
     }
 
     setIsSubmitting(true);
-    const formData = new FormData();
-    
-    formData.append('institution', data.institution);
-    formData.append('course', data.course);
-    formData.append('year', String(data.year));
-    formData.append('semester', data.semester);
-    formData.append('uploaderId', user.id); // Add user's Supabase ID
-    
-    if (data.questionFiles) {
-        Array.from(data.questionFiles).forEach(file => {
-            formData.append('questionFiles', file);
-        });
-    } else if(data.fileUrl) {
-        formData.append('fileUrl', data.fileUrl);
-    }
-
-    console.log('FormData prepared:', {
+    try {
+      await uploadQuestion.mutateAsync({
         institution: data.institution,
         course: data.course,
         year: data.year,
         semester: data.semester,
-        uploaderId: user.email,
-        hasFiles: !!data.questionFiles,
-        hasUrl: !!data.fileUrl
-    });
+        files: data.questionFiles ? Array.from(data.questionFiles) : undefined,
+        fileUrl: data.fileUrl || undefined,
+      });
 
-    try {
-        console.log('Sending request to /api/upload...');
-        
-        // Log the FormData contents for debugging
-        console.log('FormData entries:');
-        for (let [key, value] of formData.entries()) {
-            console.log(`  ${key} = ${value}`);
-        }
-        
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            body: formData,
-        });
+      toast({
+        title: 'Upload Successful!',
+        description: (
+          <span className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
+            Your question paper(s) have been submitted for review.
+          </span>
+        ),
+      });
 
-        console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('API error response:', errorText);
-            throw new Error(`Upload failed: ${errorText}`);
-        }
-
-        const result = await response.json();
-        console.log('API response:', result);
-
-        toast({
-            title: 'Upload Successful!',
-            description: 'Your question paper(s) have been submitted for review.',
-        });
-
-        form.reset();
-        setSelectedFiles([]);
-        setIsOpen(false);
+      form.reset();
+      setSelectedFiles([]);
+      setIsOpen(false);
     } catch (error) {
-        console.error('Form submission error:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Upload Failed',
-            description: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
-        });
+      console.error('Form submission error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: error instanceof Error ? error.message : 'Something went wrong. Please try again.',
+      });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
   const onDialogOpenChange = (open: boolean) => {
     if (!open) {
-        form.reset({
-            institution: '',
-            course: '',
-            year: new Date().getFullYear(),
-            semester: 'First',
-            questionFiles: undefined,
-            fileUrl: '',
-        });
-        setSelectedFiles([]);
+      form.reset({
+        institution: '',
+        course: '',
+        year: new Date().getFullYear(),
+        semester: 'First',
+        questionFiles: undefined,
+        fileUrl: '',
+      });
+      setSelectedFiles([]);
     }
     setIsOpen(open);
   };
 
   const handleTriggerClick = () => {
     if (!user) {
-        toast({
-            variant: "destructive",
-            title: "Authentication Required",
-            description: "Please log in to upload a question.",
-        })
-        router.push('/login');
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "Please log in to upload a question.",
+      });
+      navigate('/login');
     } else {
-        setIsOpen(true);
+      setIsOpen(true);
     }
   };
 
@@ -356,120 +306,119 @@ export function UploadDialog() {
             Contribute to the community by uploading new question papers.
           </DialogDescription>
         </DialogHeader>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <Tabs defaultValue="file-upload">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="file-upload" onClick={() => {
-                      form.clearErrors('fileUrl');
-                    }}>Upload File(s)</TabsTrigger>
-                    <TabsTrigger value="link-import" onClick={() => {
-                      form.clearErrors('questionFiles');
-                    }}>Import from Link</TabsTrigger>
-                </TabsList>
-                <TabsContent value="file-upload" className="pt-4">
-                    <FormField
-                        control={form.control}
-                        name="questionFiles"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormControl>
-                                <div>
-                                    <Label htmlFor="file-upload" className="relative flex justify-center w-full h-24 px-6 pt-5 pb-6 border-2 border-dashed rounded-md cursor-pointer border-border hover:border-primary">
-                                        <div className="space-y-1 text-center">
-                                            <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" />
-                                            <div className="flex text-sm text-muted-foreground">
-                                                <span className="font-medium text-primary">
-                                                    Click to upload
-                                                </span>
-                                                <p className="pl-1">or drag and drop</p>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground">PDF, PNG, JPG up to 5MB each</p>
-                                        </div>
-                                    </Label>
-                                    <Input 
-                                        id="file-upload" 
-                                        type="file" 
-                                        multiple
-                                        className="sr-only"
-                                        onChange={handleFileChange}
-                                        accept="image/png, image/jpeg, application/pdf" 
-                                    />
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="file-upload" onClick={() => {
+                  form.clearErrors('fileUrl');
+                }}>Upload File(s)</TabsTrigger>
+                <TabsTrigger value="link-import" onClick={() => {
+                  form.clearErrors('questionFiles');
+                }}>Import from Link</TabsTrigger>
+              </TabsList>
+              <TabsContent value="file-upload" className="pt-4">
+                <FormField
+                  control={form.control}
+                  name="questionFiles"
+                  render={() => (
+                    <FormItem>
+                      <FormControl>
+                        <div>
+                          <Label htmlFor="file-upload" className="relative flex justify-center w-full h-24 px-6 pt-5 pb-6 border-2 border-dashed rounded-md cursor-pointer border-border hover:border-primary">
+                            <div className="space-y-1 text-center">
+                              <UploadCloud className="mx-auto h-12 w-12 text-muted-foreground" />
+                              <div className="flex text-sm text-muted-foreground">
+                                <span className="font-medium text-primary">
+                                  Click to upload
+                                </span>
+                                <p className="pl-1">or drag and drop</p>
+                              </div>
+                              <p className="text-xs text-muted-foreground">PDF, PNG, JPG up to 5MB each</p>
+                            </div>
+                          </Label>
+                          <Input
+                            id="file-upload"
+                            type="file"
+                            multiple
+                            className="sr-only"
+                            onChange={handleFileChange}
+                            accept="image/png, image/jpeg, application/pdf"
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                      {selectedFiles.length > 0 && (
+                        <div className="space-y-2 pt-2">
+                          <h4 className="text-sm font-medium">Selected Files:</h4>
+                          <div className="space-y-2">
+                            {selectedFiles.map((file, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 text-sm rounded-md bg-muted">
+                                <div className="flex items-center gap-2 truncate">
+                                  <Paperclip className="h-4 w-4" />
+                                  <span className="truncate">{file.name}</span>
                                 </div>
-                            </FormControl>
-                            <FormMessage />
-                            {selectedFiles.length > 0 && (
-                                <div className="space-y-2 pt-2">
-                                    <h4 className="text-sm font-medium">Selected Files:</h4>
-                                    <div className="space-y-2">
-                                    {selectedFiles.map((file, index) => (
-                                        <div key={index} className="flex items-center justify-between p-2 text-sm rounded-md bg-muted">
-                                            <div className="flex items-center gap-2 truncate">
-                                                <Paperclip className="h-4 w-4" />
-                                                <span className="truncate">{file.name}</span>
-                                            </div>
-                                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFile(index)}>
-                                                <X className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                    </div>
-                                </div>
-                            )}
-                        </FormItem>
-                        )}
-                    />
-                </TabsContent>
-                <TabsContent value="link-import" className="pt-4 space-y-4">
-                    <FormField
-                        control={form.control}
-                        name="fileUrl"
-                        render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Google Drive Link</FormLabel>
-                                <FormControl>
-                                    <div className="flex gap-2">
-                                        <Input 
-                                            placeholder="Paste public Google Drive link here"
-                                            {...field}
-                                            onChange={(e) => {
-                                                field.onChange(e);
-                                                form.clearErrors('questionFiles');
-                                                setSelectedFiles([]);
-                                                form.setValue('questionFiles', undefined);
-                                            }}
-                                        />
-                                        <Button type="button" onClick={handleProcessLink} disabled={isProcessing}>
-                                            {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                            Process
-                                        </Button>
-                                    </div>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )}
-                    />
-                </TabsContent>
+                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeFile(index)}>
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
+              <TabsContent value="link-import" className="pt-4 space-y-4">
+                <FormField
+                  control={form.control}
+                  name="fileUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Google Drive Link</FormLabel>
+                      <FormControl>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Paste public Google Drive link here"
+                            {...field}
+                            onChange={(e) => {
+                              field.onChange(e);
+                              form.clearErrors('questionFiles');
+                              setSelectedFiles([]);
+                              form.setValue('questionFiles', undefined);
+                            }}
+                          />
+                          <Button type="button" onClick={handleProcessLink} disabled={isProcessing}>
+                            {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Process
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </TabsContent>
             </Tabs>
-            
+
             <FormField
               control={form.control}
               name="institution"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Institution</FormLabel>
-                    <Combobox
-                        options={institutionOptions}
-                        placeholder="Select an institution"
-                        searchPlaceholder="Search institutions..."
-                        value={field.value}
-                        onSelect={(value) => {
-                            console.log('Institution selected:', value);
-                            field.onChange(value);
-                            form.setValue('institution', value, { shouldValidate: true });
-                        }}
-                    />
+                  <Combobox
+                    options={institutionOptions}
+                    placeholder="Select an institution"
+                    searchPlaceholder="Search institutions..."
+                    value={field.value}
+                    onSelect={(value) => {
+                      field.onChange(value);
+                      form.setValue('institution', value, { shouldValidate: true });
+                    }}
+                  />
                   <FormMessage />
                 </FormItem>
               )}
@@ -490,52 +439,52 @@ export function UploadDialog() {
             />
 
             <div className="grid grid-cols-2 gap-4">
-                <FormField
+              <FormField
                 control={form.control}
                 name="year"
                 render={({ field }) => (
-                    <FormItem>
+                  <FormItem>
                     <FormLabel>Year</FormLabel>
                     <FormControl>
-                        <Input type="number" placeholder="e.g., 2023" {...field} />
+                      <Input type="number" placeholder="e.g., 2023" {...field} />
                     </FormControl>
                     <FormMessage />
-                    </FormItem>
+                  </FormItem>
                 )}
-                />
-                <FormField
+              />
+              <FormField
                 control={form.control}
                 name="semester"
                 render={({ field }) => (
-                    <FormItem>
+                  <FormItem>
                     <FormLabel>Semester</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
-                        <FormControl>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
                         <SelectTrigger>
-                            <SelectValue placeholder="Select semester" />
+                          <SelectValue placeholder="Select semester" />
                         </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
+                      </FormControl>
+                      <SelectContent>
                         <SelectItem value="First">First Semester</SelectItem>
                         <SelectItem value="Second">Second Semester</SelectItem>
-                        </SelectContent>
+                      </SelectContent>
                     </Select>
                     <FormMessage />
-                    </FormItem>
+                  </FormItem>
                 )}
-                />
+              />
             </div>
-            
+
             <DialogFooter>
-                <DialogClose asChild>
-                    <Button type="button" variant="outline">
-                        Cancel
-                    </Button>
-                </DialogClose>
-                <Button type="submit" disabled={isProcessing || isSubmitting}>
-                  {(isProcessing || isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isProcessing ? 'Processing...' : isSubmitting ? 'Submit for Review' : 'Submit for Review'}
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  Cancel
                 </Button>
+              </DialogClose>
+              <Button type="submit" disabled={isProcessing || isSubmitting}>
+                {(isProcessing || isSubmitting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isProcessing ? 'Processing...' : 'Submit for Review'}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

@@ -1,5 +1,3 @@
-'use server';
-
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
@@ -45,7 +43,7 @@ export const extractQuestionMetadataFlow = ai.defineFlow(
     inputSchema: ExtractQuestionMetadataInputSchema,
     outputSchema: QuestionMetadataSchema,
   },
-  async ({ ocrText, filename, uploaderId }) => {
+  async ({ ocrText, filename, uploaderId: _uploaderId }) => {
     // Use the AI model to extract structured metadata
     const prompt = `You are an expert at parsing academic question papers from Nigerian universities.
 

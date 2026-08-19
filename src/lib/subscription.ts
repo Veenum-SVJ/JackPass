@@ -1,6 +1,19 @@
 /**
  * Subscription tiers and access control for JackPass.
  */
+
+/**
+ * Read an env var safely in both the browser bundle and Node.
+ * Vite does not replace arbitrary process.env references, so the browser
+ * must not evaluate them directly.
+ */
+function getServerEnv(name: string): string | undefined {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[name];
+  }
+  return undefined;
+}
+
 export type SubscriptionTier = 'free' | 'premium' | 'institutional';
 
 export interface SubscriptionPlan {
@@ -32,7 +45,7 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionTier, SubscriptionPlan> = {
     description: 'Full access to all features',
     priceNaira: 2000,
     durationDays: 30,
-    paystackPlanCode: process.env.PAYSTACK_PREMIUM_PLAN_CODE,
+    paystackPlanCode: getServerEnv('PAYSTACK_PREMIUM_PLAN_CODE'),
     features: [
       'Unlimited question access',
       'Advanced search and filters',
@@ -48,7 +61,7 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionTier, SubscriptionPlan> = {
     description: 'For universities and large groups',
     priceNaira: 50000,
     durationDays: 365,
-    paystackPlanCode: process.env.PAYSTACK_INSTITUTIONAL_PLAN_CODE,
+    paystackPlanCode: getServerEnv('PAYSTACK_INSTITUTIONAL_PLAN_CODE'),
     features: [
       'Everything in Premium',
       'Bulk user accounts (up to 1000)',

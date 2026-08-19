@@ -1,6 +1,4 @@
-'use client';
-
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { createBrowserSupabase } from '@/lib/supabase';
 import { User, Session } from '@supabase/supabase-js';
 
@@ -77,6 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- supabase client is stable; checkAdminStatus is recreated each render
   }, [supabase.auth]);
 
   // Handle online/offline status

@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Eye, Edit, Check, X, Copy, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -41,15 +41,15 @@ interface QuestionReviewCardProps {
 
 export function QuestionReviewCard({ question, onApprove, onReject }: QuestionReviewCardProps) {
   const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    approved: 'bg-green-100 text-green-800',
-    rejected: 'bg-red-100 text-red-800',
+    pending: 'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300',
+    approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300',
+    rejected: 'bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-300',
   };
 
   const typeColors = {
-    Objective: 'bg-blue-100 text-blue-800',
-    Theory: 'bg-purple-100 text-purple-800',
-    Mixed: 'bg-orange-100 text-orange-800',
+    Objective: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-400/15 dark:text-indigo-300',
+    Theory: 'bg-violet-100 text-violet-800 dark:bg-violet-400/15 dark:text-violet-300',
+    Mixed: 'bg-orange-100 text-orange-800 dark:bg-orange-400/15 dark:text-orange-300',
   };
 
   const confidence = question.ai_extracted_data?.confidence;
@@ -114,7 +114,7 @@ export function QuestionReviewCard({ question, onApprove, onReject }: QuestionRe
           {question.explanation && (
             <div>
               <p className="text-muted-foreground text-xs mb-1">Explanation</p>
-              <p className="line-clamp-2 bg-blue-50 border border-blue-200 p-3 rounded text-sm">
+              <p className="line-clamp-2 bg-indigo-50 border border-indigo-200 p-3 rounded text-sm dark:bg-indigo-400/10 dark:border-indigo-400/20">
                 {question.explanation.slice(0, 200)}...
               </p>
             </div>

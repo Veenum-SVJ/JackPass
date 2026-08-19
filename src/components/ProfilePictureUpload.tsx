@@ -1,13 +1,9 @@
-'use client';
-
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Camera, Upload, X, User } from 'lucide-react';
-import Image from 'next/image';
 
 interface ProfilePictureUploadProps {
   currentAvatar: string;
@@ -62,7 +58,7 @@ export function ProfilePictureUpload({ currentAvatar, onAvatarChange, userName }
       const supabase = (await import('@/lib/supabase')).createBrowserSupabase();
 
       const fileName = `${user.id}_${Date.now()}_${selectedFile.name}`;
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('profile-pictures')
         .upload(fileName, selectedFile);
 
@@ -124,13 +120,11 @@ export function ProfilePictureUpload({ currentAvatar, onAvatarChange, userName }
         <div className="relative group">
           <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-border bg-muted flex items-center justify-center">
             {displayAvatar && displayAvatar !== 'https://placehold.co/128x128.png' ? (
-              <Image
+              <img
                 src={displayAvatar}
                 alt={`${userName}'s profile picture`}
-                width={128}
-                height={128}
                 className="w-full h-full object-cover"
-                unoptimized={displayAvatar.startsWith('blob:')}
+                referrerPolicy="no-referrer"
               />
             ) : (
               <User className="w-16 h-16 text-muted-foreground" />

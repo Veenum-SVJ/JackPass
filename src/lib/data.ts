@@ -1,6 +1,7 @@
 import { createBrowserSupabase } from '@/lib/supabase';
 import type { Question } from './types';
 import { institutions as staticInstitutions } from './institutions';
+import { mapQuestionRow, type QuestionRow } from './mappers';
 
 export const institutions = staticInstitutions;
 
@@ -18,7 +19,7 @@ export const getAllQuestions = async (): Promise<Question[]> => {
     return [];
   }
 
-  return data || [];
+  return (data ?? []).map((row) => mapQuestionRow(row as QuestionRow));
 };
 
 export const getApprovedQuestions = async (): Promise<Question[]> => {
@@ -34,7 +35,7 @@ export const getApprovedQuestions = async (): Promise<Question[]> => {
     return [];
   }
 
-  return data || [];
+  return (data ?? []).map((row) => mapQuestionRow(row as QuestionRow));
 };
 
 export const getQuestionById = async (id: string): Promise<Question | null> => {
@@ -50,7 +51,7 @@ export const getQuestionById = async (id: string): Promise<Question | null> => {
     return null;
   }
 
-  return data || null;
+  return data ? mapQuestionRow(data as QuestionRow) : null;
 };
 
 export const getRelatedQuestions = async (currentQuestion: Question): Promise<Question[]> => {
@@ -76,15 +77,15 @@ export const getRelatedQuestions = async (currentQuestion: Question): Promise<Qu
 
   const relatedMap = new Map<string, Question>();
 
-  courseData?.forEach(doc => {
+  courseData?.forEach((doc) => {
     if (doc.id !== currentQuestion.id) {
-      relatedMap.set(doc.id, doc as Question);
+      relatedMap.set(doc.id, mapQuestionRow(doc as QuestionRow));
     }
   });
 
-  institutionData?.forEach(doc => {
+  institutionData?.forEach((doc) => {
     if (doc.id !== currentQuestion.id) {
-      relatedMap.set(doc.id, doc as Question);
+      relatedMap.set(doc.id, mapQuestionRow(doc as QuestionRow));
     }
   });
 

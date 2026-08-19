@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { normalizeSupabaseUrl } from './supabase-utils';
 
 export const createServerSupabase = () => createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL!),
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 

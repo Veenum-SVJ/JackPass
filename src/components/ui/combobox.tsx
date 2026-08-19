@@ -42,6 +42,7 @@ export function Combobox({ options, value, onSelect, placeholder, searchPlacehol
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-label={placeholder || "Select option..."}
           className="w-full justify-between"
         >
           {selectedOption ? selectedOption.label : placeholder || "Select option..."}

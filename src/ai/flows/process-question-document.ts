@@ -1,5 +1,3 @@
-'use server';
-
 /**
  * @fileOverview An AI agent that extracts structured data from a document URL or a data URI.
  *
