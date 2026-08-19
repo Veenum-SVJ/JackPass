@@ -13,9 +13,10 @@ export const createBrowserSupabase = (): SupabaseClient => {
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     if (!url || !anonKey) {
-      throw new Error(
-        'Supabase env vars are missing. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file.'
-      );
+      console.error('Supabase env vars are missing. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+      // Return a dummy client that won't crash the app — data fetching will fail gracefully
+      client = createClient('https://placeholder.supabase.co', 'placeholder-key');
+      return client;
     }
 
     client = createClient(normalizeSupabaseUrl(url), anonKey);
