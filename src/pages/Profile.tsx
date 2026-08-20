@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, CheckCircle, BarChart2, BookOpen, MessageSquare, Award } from 'lucide-react';
+import { Upload, CheckCircle, BarChart2, BookOpen, MessageSquare, Award, Pencil } from 'lucide-react';
 import { EditProfileDialog } from '@/components/EditProfileDialog';
 import { ProfilePictureUpload } from '@/components/ProfilePictureUpload';
 import { useAuth } from '@/contexts/AuthContext';
@@ -183,7 +183,9 @@ export default function ProfilePage() {
                       <span className={`text-xs font-medium px-2 py-1 rounded-full ${q.status === 'approved' ? 'text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-400/15' : q.status === 'pending' ? 'text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-400/15' : 'text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-400/15'}`}>
                         {q.status}
                       </span>
-                      <Button variant="outline" size="sm">Edit</Button>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/questions/${q.id}`)}>
+                        <Pencil className="h-4 w-4 mr-1" /> View
+                      </Button>
                     </div>
                   </div>
                 ))

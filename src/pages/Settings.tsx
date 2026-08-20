@@ -17,6 +17,7 @@ import {
   ShieldQuestion,
   ChevronRight,
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { Link } from 'react-router-dom';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 import { Switch } from '@/components/ui/switch';
@@ -35,6 +36,7 @@ const settingsNav = [
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('account');
   const [defaultUniversity, setDefaultUniversity] = useState('');
+  const { toast } = useToast();
 
   const institutionOptions = institutions.map(inst => ({
     value: inst.name.toLowerCase(),
@@ -56,21 +58,21 @@ export default function SettingsPage() {
                   <h3 className="font-medium">Email Address</h3>
                   <p className="text-sm text-muted-foreground">user@example.com</p>
                 </div>
-                <Button variant="outline">Change Email</Button>
+                <Button variant="outline" onClick={() => toast({ title: 'Coming Soon', description: 'Email change functionality will be available soon.' })}>Change Email</Button>
               </div>
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
                   <h3 className="font-medium">Password</h3>
                   <p className="text-sm text-muted-foreground">Last changed 3 months ago</p>
                 </div>
-                <Button variant="outline">Change Password</Button>
+                <Button variant="outline" onClick={() => toast({ title: 'Coming Soon', description: 'Password change functionality will be available soon.' })}>Change Password</Button>
               </div>
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
                   <h3 className="font-medium">Two-Factor Authentication</h3>
                   <p className="text-sm text-muted-foreground">Keep your account extra secure.</p>
                 </div>
-                <Button variant="outline">Enable 2FA</Button>
+                <Button variant="outline" onClick={() => toast({ title: 'Coming Soon', description: 'Two-factor authentication will be available soon.' })}>Enable 2FA</Button>
               </div>
               <div className="p-4 border rounded-lg border-destructive/50">
                 <h3 className="font-medium text-destructive">Delete Account</h3>
@@ -168,14 +170,14 @@ export default function SettingsPage() {
                   <h3 className="font-medium">Manage Connected Devices</h3>
                   <p className="text-sm text-muted-foreground">Log out of sessions on other devices.</p>
                 </div>
-                <Button variant="outline">Manage Sessions</Button>
+                <Button variant="outline" onClick={() => toast({ title: 'Coming Soon', description: 'Session management will be available soon.' })}>Manage Sessions</Button>
               </div>
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
                   <h3 className="font-medium">Request Data Download</h3>
                   <p className="text-sm text-muted-foreground">Get a copy of all your data stored on JackPass.</p>
                 </div>
-                <Button variant="outline">Request Download</Button>
+                <Button variant="outline" onClick={() => toast({ title: 'Coming Soon', description: 'Data download will be available soon.' })}>Request Download</Button>
               </div>
             </CardContent>
           </Card>

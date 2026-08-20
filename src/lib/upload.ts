@@ -13,7 +13,8 @@ export async function processQuestionUpload(
     title?: string;
     institution?: string;
     course?: string;
-    year?: number;
+    courseCode?: string;
+    year?: string;
     semester?: 'First' | 'Second';
     type?: 'Objective' | 'Theory' | 'Mixed';
   } = {}
@@ -71,14 +72,17 @@ export async function processQuestionUpload(
     throw new Error(`Failed to save upload record: ${uploadRecordError.message}`);
   }
 
-  // 3. Process OCR asynchronously (non-blocking)
-  // We don't await this - it runs in the background
-  processOcrAsync(uploadRecordData.id, file, storageFileName);
+  // 3. Process OCR synchronously so it completes within the serverless timeout
+  try {
+    await processOcrSync(uploadRecordData.id, file, storageFileName);
+  } catch (ocrError) {
+    console.error('OCR processing failed (non-fatal):', ocrError);
+  }
 
-  // 4. Return immediately with upload info
+  // 4. Return with upload info
   return {
     upload: uploadRecordData,
-    ocrText: null, // OCR still processing
+    ocrText: null,
     ocrConfidence: null,
     fileUrl
   };
@@ -112,9 +116,118 @@ export async function triggerAIExtraction(
 }
 
 /**
- * Asynchronously process OCR and update the upload record, then trigger AI extraction
+ * Process a link import (Google Drive) - fetches the file, stores it, runs OCR + AI synchronously.
  */
-async function processOcrAsync(uploadId: string, file: File, _storageFileName: string) {
+export async function processLinkImport(
+  fileUrl: string,
+  uploaderId: string,
+  _metadata: {
+    title?: string;
+    institution?: string;
+    course?: string;
+    courseCode?: string;
+    year?: string;
+    semester?: 'First' | 'Second';
+    type?: 'Objective' | 'Theory' | 'Mixed';
+  } = {}
+) {
+  const supabase = createServerSupabase();
+  const { v4: uuidv4 } = await import('uuid');
+
+  // Create upload record for the link import
+  const uploadRecord = {
+    id: uuidv4(),
+    uploader_id: uploaderId,
+    file_name: `link-import-${Date.now()}.pdf`,
+    file_url: fileUrl,
+    file_type: 'link-import',
+    file_size: 0,
+    upload_status: 'processing' as const,
+    ocr_text: null,
+    ocr_confidence: null,
+    uploaded_at: new Date().toISOString(),
+    processed_at: null
+  };
+
+  const { data: uploadRecordData, error: insertError } = await supabase
+    .from('question_uploads')
+    .insert([uploadRecord])
+    .select()
+    .single();
+
+  if (insertError) {
+    throw new Error(`Failed to save upload record: ${insertError.message}`);
+  }
+
+  // Process the link import asynchronously
+  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId).catch(err => {
+    console.error('Link import processing failed:', err);
+  });
+
+  return {
+    upload: uploadRecordData,
+    ocrText: null,
+    ocrConfidence: null,
+    fileUrl,
+  };
+}
+
+/**
+ * Process a link import asynchronously.
+ */
+async function processLinkImportAsync(uploadId: string, fileUrl: string, uploaderId: string) {
+  const supabase = createServerSupabase();
+
+  try {
+    // Import the document processor
+    const { processQuestionDocument } = await import('@/ai/flows/process-question-document');
+
+    // Run the AI document flow to extract text and metadata
+    const result = await processQuestionDocument({ fileUrl });
+
+    // Update upload record with extracted content
+    const { error: updateError } = await supabase
+      .from('question_uploads')
+      .update({
+        upload_status: 'processed' as const,
+        ocr_text: result.fullContent,
+        ocr_confidence: JSON.stringify({ overall: 0.9 }),
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', uploadId);
+
+    if (updateError) {
+      console.error('Failed to update link import record:', updateError);
+    }
+
+    // Create question record from extracted metadata
+    const { processUploadedQuestionFlow } = await import('@/ai/flows/process-uploaded-question');
+    await processUploadedQuestionFlow({
+      uploadId,
+      ocrText: result.fullContent,
+      filename: `link-import-${Date.now()}.pdf`,
+      uploaderId,
+    });
+
+    console.log(`Link import ${uploadId} processed successfully`);
+  } catch (error) {
+    console.error('Link import processing failed:', error);
+    await supabase
+      .from('question_uploads')
+      .update({
+        upload_status: 'failed' as const,
+        ocr_text: `Link import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', uploadId);
+  }
+}
+
+/**
+ * Synchronously process OCR and update the upload record, then trigger AI extraction.
+ * This runs within the serverless function lifecycle.
+ */
+async function processOcrSync(uploadId: string, file: File, _storageFileName: string) {
   const supabase = createServerSupabase();
 
   try {

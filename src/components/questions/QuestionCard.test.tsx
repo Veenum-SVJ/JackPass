@@ -9,7 +9,7 @@ const question: Question = {
   title: 'Binary Search Trees',
   institution: 'University of Lagos',
   course: 'CSC 301',
-  year: 2023,
+  year: '2023/2024',
   semester: 'First',
   type: 'Theory',
   status: 'approved',
@@ -27,7 +27,7 @@ describe('QuestionCard', () => {
 
     expect(screen.getByText('Binary Search Trees')).toBeInTheDocument();
     expect(screen.getByText('University of Lagos')).toBeInTheDocument();
-    expect(screen.getByText('2023 - First')).toBeInTheDocument();
+    expect(screen.getByText('2023/2024 - First')).toBeInTheDocument();
     expect(screen.getByText('Theory')).toBeInTheDocument();
 
     const link = screen.getByRole('link');

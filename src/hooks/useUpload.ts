@@ -4,7 +4,8 @@ import { apiFetch } from '@/lib/api';
 export interface UploadQuestionInput {
   institution: string;
   course: string;
-  year: number;
+  courseCode?: string;
+  year: string;
   semester: 'First' | 'Second';
   files?: File[];
   fileUrl?: string;
@@ -24,6 +25,7 @@ export interface ProcessDocumentInput {
 export interface ProcessDocumentResult {
   institutionName: string;
   courseName: string;
+  courseCode?: string;
   examYear: number;
   semester: 'First' | 'Second';
   fullContent: string;
@@ -40,7 +42,8 @@ export function useUploadQuestion() {
       const formData = new FormData();
       formData.append('institution', input.institution);
       formData.append('course', input.course);
-      formData.append('year', String(input.year));
+      if (input.courseCode) formData.append('courseCode', input.courseCode);
+      formData.append('year', input.year);
       formData.append('semester', input.semester);
 
       if (input.files && input.files.length > 0) {

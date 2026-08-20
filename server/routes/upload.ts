@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware';
-import { processQuestionUpload, getUploadStatus } from '@/lib/upload';
+import { processQuestionUpload, processLinkImport, getUploadStatus } from '@/lib/upload';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -15,7 +15,7 @@ export const uploadRouter = Router();
 
 /**
  * POST /api/upload
- * Upload question file(s) → Supabase Storage → async OCR + AI processing.
+ * Upload question file(s) or import from a link → Supabase Storage → async OCR + AI processing.
  */
 uploadRouter.post('/', requireAuth, upload.any(), async (req, res) => {
   try {
@@ -23,16 +23,40 @@ uploadRouter.post('/', requireAuth, upload.any(), async (req, res) => {
 
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
     const file = files[0];
+    const fileUrl = typeof req.body.fileUrl === 'string' ? req.body.fileUrl : undefined;
 
     const title = typeof req.body.title === 'string' ? req.body.title : undefined;
     const institution = typeof req.body.institution === 'string' ? req.body.institution : undefined;
     const course = typeof req.body.course === 'string' ? req.body.course : undefined;
-    const yearRaw = typeof req.body.year === 'string' ? parseInt(req.body.year, 10) : undefined;
+    const courseCode = typeof req.body.courseCode === 'string' ? req.body.courseCode : undefined;
+    const yearRaw = typeof req.body.year === 'string' ? req.body.year.trim() : undefined;
     const semester = req.body.semester as 'First' | 'Second' | undefined;
     const type = req.body.type as 'Objective' | 'Theory' | 'Mixed' | undefined;
 
+    // Handle link import (no file attached)
+    if (fileUrl && !file) {
+      const result = await processLinkImport(fileUrl, user.id, {
+        title,
+        institution,
+        course: course || undefined,
+        courseCode: courseCode || undefined,
+        year: yearRaw || undefined,
+        semester: semester || undefined,
+        type: type || undefined,
+      });
+
+      res.json({
+        success: true,
+        uploadId: result.upload.id,
+        fileUrl: result.fileUrl,
+        ocrText: result.ocrText,
+        message: 'Link imported and processed successfully',
+      });
+      return;
+    }
+
     if (!file) {
-      res.status(400).json({ error: 'No file provided' });
+      res.status(400).json({ error: 'No file or link provided' });
       return;
     }
 
@@ -57,6 +81,7 @@ uploadRouter.post('/', requireAuth, upload.any(), async (req, res) => {
       title,
       institution,
       course: course || undefined,
+      courseCode: courseCode || undefined,
       year: yearRaw || undefined,
       semester: semester || undefined,
       type: type || undefined,

@@ -10,7 +10,7 @@ const mockQuestion: Question = {
   title: 'Calculus I',
   institution: 'University of Lagos',
   course: 'MTH 101',
-  year: 2023,
+  year: '2023/2024',
   semester: 'First',
   type: 'Objective',
   status: 'approved',

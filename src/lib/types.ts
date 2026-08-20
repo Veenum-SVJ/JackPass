@@ -22,7 +22,8 @@ export interface Question {
   title: string;
   institution: string;
   course: string;
-  year: number;
+  courseCode?: string;
+  year: string; // Academic year range, e.g. '2025/2026'
   semester: 'First' | 'Second';
   type: 'Objective' | 'Theory' | 'Mixed';
   status: 'pending' | 'approved' | 'rejected';

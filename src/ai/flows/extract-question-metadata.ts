@@ -17,7 +17,7 @@ const QuestionMetadataSchema = z.object({
   course: z.string().describe('Course code and name (e.g., "CSC 301 - Data Structures and Algorithms")'),
   faculty: z.string().optional().describe('Faculty/School (e.g., "Faculty of Science")'),
   department: z.string().optional().describe('Department (e.g., "Computer Science")'),
-  year: z.number().int().min(1990).max(new Date().getFullYear()).describe('Academic year (e.g., 2023)'),
+  year: z.string().describe('Academic year range (e.g., "2025/2026" or "2024/2025")'),
   semester: z.enum(['First', 'Second']).describe('Semester: First or Second'),
   type: z.enum(['Objective', 'Theory', 'Mixed']).describe('Question type: Objective (MCQ), Theory (essay), or Mixed'),
   contentPreview: z.string().describe('First 200-300 chars of the question content for search results'),
@@ -60,7 +60,7 @@ Extract the following information as JSON:
 3. course: Course code and name (e.g., "CSC 301 - Data Structures", "MTH 201 - Calculus", "PHY 101 - General Physics")
 4. faculty: Faculty/School if mentioned (e.g., "Faculty of Science", "School of Engineering")
 5. department: Department if mentioned (e.g., "Computer Science", "Mathematics", "Physics")
-6. year: The academic year (e.g., 2023, 2022). If not explicitly stated, infer from context or use current year.
+6. year: The academic year as a range (e.g., "2025/2026", "2024/2025"). If a single year like 2023 is found, convert it to a range (2022/2023 for first semester, 2023/2024 for second semester). If not explicitly stated, infer from context or use current year range.
 7. semester: "First" or "Second" semester. If not stated, default to "First".
 8. type: "Objective" (multiple choice), "Theory" (essay/structured questions), or "Mixed"
 9. contentPreview: First 200-300 characters of the actual question content (not metadata)

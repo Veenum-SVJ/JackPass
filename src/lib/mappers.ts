@@ -10,7 +10,7 @@ export interface QuestionRow {
   course: string;
   faculty?: string | null;
   department?: string | null;
-  year: number;
+  year: string | number; // Accept both for backwards compatibility during migration
   semester: 'First' | 'Second';
   type: 'Objective' | 'Theory' | 'Mixed';
   status: 'pending' | 'approved' | 'rejected';
@@ -40,7 +40,7 @@ export function mapQuestionRow(row: QuestionRow): Question {
     title: row.title,
     institution: row.institution,
     course: row.course,
-    year: row.year,
+    year: String(row.year),
     semester: row.semester,
     type: row.type,
     status: row.status,

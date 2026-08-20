@@ -47,10 +47,13 @@ const fileSchema = z.custom<FileList>()
     'Only .jpg, .png, and .pdf formats are supported.'
   );
 
+const currentYear = new Date().getFullYear();
+
 const formSchema = z.object({
   institution: z.string().min(1, 'Please select an institution.'),
   course: z.string().min(1, 'Please enter a course name.'),
-  year: z.coerce.number().min(1980, "Invalid year").max(new Date().getFullYear() + 1, "Invalid year"),
+  courseCode: z.string().optional(),
+  year: z.string().min(1, 'Academic year is required'),
   semester: z.enum(['First', 'Second']),
   questionFiles: fileSchema.optional(),
   fileUrl: z.string().url("Please enter a valid URL.").or(z.literal('')).optional(),
@@ -77,7 +80,8 @@ export function UploadDialog() {
     defaultValues: {
       institution: '',
       course: '',
-      year: new Date().getFullYear(),
+      courseCode: '',
+      year: `${currentYear}/${currentYear + 1}`,
       semester: 'First',
       questionFiles: undefined,
       fileUrl: '',
@@ -137,7 +141,7 @@ export function UploadDialog() {
         const result = await processDocument.mutateAsync({ fileUrl: dataUri });
         if (result.institutionName) form.setValue('institution', result.institutionName, { shouldValidate: true });
         if (result.courseName) form.setValue('course', result.courseName, { shouldValidate: true });
-        if (result.examYear) form.setValue('year', result.examYear, { shouldValidate: true });
+        if (result.examYear) form.setValue('year', String(result.examYear), { shouldValidate: true });
         if (result.semester) form.setValue('semester', result.semester, { shouldValidate: true });
         toast({
           title: 'Metadata Extracted!',
@@ -177,7 +181,7 @@ export function UploadDialog() {
       const result = await processDocument.mutateAsync({ fileUrl: linkValue });
       form.setValue('institution', result.institutionName, { shouldValidate: true });
       form.setValue('course', result.courseName, { shouldValidate: true });
-      form.setValue('year', result.examYear, { shouldValidate: true });
+      form.setValue('year', String(result.examYear), { shouldValidate: true });
       form.setValue('semester', result.semester, { shouldValidate: true });
       form.setValue('fileUrl', linkValue, { shouldValidate: true });
       form.setValue('questionFiles', undefined);
@@ -232,6 +236,7 @@ export function UploadDialog() {
       await uploadQuestion.mutateAsync({
         institution: data.institution,
         course: data.course,
+        courseCode: data.courseCode,
         year: data.year,
         semester: data.semester,
         files: data.questionFiles ? Array.from(data.questionFiles) : undefined,
@@ -268,7 +273,8 @@ export function UploadDialog() {
       form.reset({
         institution: '',
         course: '',
-        year: new Date().getFullYear(),
+        courseCode: '',
+        year: `${currentYear}/${currentYear + 1}`,
         semester: 'First',
         questionFiles: undefined,
         fileUrl: '',
@@ -444,9 +450,9 @@ export function UploadDialog() {
                 name="year"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Year</FormLabel>
+                    <FormLabel>Academic Year</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="e.g., 2023" {...field} />
+                      <Input placeholder="e.g., 2025/2026" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -454,26 +460,40 @@ export function UploadDialog() {
               />
               <FormField
                 control={form.control}
-                name="semester"
+                name="courseCode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Semester</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select semester" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="First">First Semester</SelectItem>
-                        <SelectItem value="Second">Second Semester</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Course Code</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., CSC 301" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+              <FormField
+                control={form.control}
+                name="semester"
+                render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Semester</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select semester" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="First">First Semester</SelectItem>
+                      <SelectItem value="Second">Second Semester</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <DialogFooter>
               <DialogClose asChild>

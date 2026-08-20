@@ -29,7 +29,7 @@ function HomePageContent() {
     return allQuestions.filter((q) => {
       if (appliedFilters.institution && q.institution !== appliedFilters.institution) return false;
       if (appliedFilters.course && !q.course.toLowerCase().includes(appliedFilters.course.toLowerCase())) return false;
-      if (appliedFilters.year && q.year.toString() !== appliedFilters.year) return false;
+      if (appliedFilters.year && q.year !== appliedFilters.year) return false;
       if (appliedFilters.semester && q.semester !== appliedFilters.semester) return false;
       if (appliedFilters.type && q.type !== appliedFilters.type) return false;
       return true;
