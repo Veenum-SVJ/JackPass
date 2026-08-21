@@ -38,6 +38,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useProcessDocument, useUploadQuestion } from '@/hooks/useUpload';
+import { compressImage } from '@/lib/compressImage';
 
 const fileSchema = z.custom<FileList>()
   .refine((files) => files && files.length > 0, 'At least one file is required.')
@@ -132,6 +133,10 @@ export function UploadDialog() {
       description: 'Scanning image with AI to read its contents. This may take a moment.',
     });
 
+    // Compress large images before sending to the AI scanner to stay
+    // within Vercel's serverless body-size limit and Gemini's input limits.
+    const fileForScan = await compressImage(file);
+
     const reader = new FileReader();
     reader.onloadend = async () => {
       const dataUri = reader.result as string;
@@ -158,7 +163,7 @@ export function UploadDialog() {
         setIsProcessing(false);
       }
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(fileForScan);
   };
 
   const handleProcessLink = async () => {
