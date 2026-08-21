@@ -108,7 +108,7 @@ export function UploadDialog() {
     form.setValue('questionFiles', dataTransfer.files, { shouldValidate: true });
     form.clearErrors('fileUrl');
 
-    // Process the first file for metadata
+    // Scan the first file for content
     const firstFile = allFiles[0];
     if (firstFile) {
       processFile(firstFile);
@@ -129,7 +129,7 @@ export function UploadDialog() {
     setIsProcessing(true);
     toast({
       title: 'Processing file...',
-      description: 'Extracting metadata with AI. This may take a moment.',
+      description: 'Scanning image with AI to read its contents. This may take a moment.',
     });
 
     const reader = new FileReader();
@@ -144,15 +144,15 @@ export function UploadDialog() {
         if (result.examYear) form.setValue('year', String(result.examYear), { shouldValidate: true });
         if (result.semester) form.setValue('semester', result.semester, { shouldValidate: true });
         toast({
-          title: 'Metadata Extracted!',
-          description: "We've pre-filled the form for you. Please review and submit.",
+          title: 'Image Scanned!',
+          description: "We've read the image and pre-filled the form. Please review and submit.",
         });
       } catch (error) {
         console.error('Error processing file:', error);
         toast({
           variant: 'destructive',
-          title: 'Extraction Failed',
-          description: 'Could not extract metadata from the file. Please fill the form manually.',
+          title: 'Scan Failed',
+          description: 'Could not read the image content. Please fill the form manually.',
         });
       } finally {
         setIsProcessing(false);
@@ -189,7 +189,7 @@ export function UploadDialog() {
       form.clearErrors('questionFiles');
       toast({
         title: 'Document Processed!',
-        description: "We've extracted the details from the document. Please review and submit.",
+        description: "We've read the document and pre-filled the form. Please review and submit.",
       });
     } catch (error) {
       console.error('Error processing document:', error);

@@ -65,7 +65,7 @@ export function useUploadQuestion() {
 }
 
 /**
- * Run the AI document-processing flow server-side (metadata extraction).
+ * Run the AI image-scanning flow server-side (reads image content to extract structured fields).
  */
 export function useProcessDocument() {
   return useMutation({

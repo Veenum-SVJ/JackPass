@@ -10,7 +10,7 @@ const ProcessDocumentBody = z.object({
 
 /**
  * POST /api/ai/process-document
- * Run the Genkit document-processing flow server-side.
+ * Run the Genkit image-scanning flow server-side.
  * Accepts either a public Google Drive URL or a base64 data URI.
  */
 aiRouter.post('/process-document', async (req, res) => {

@@ -1,7 +1,7 @@
 /**
- * @fileOverview An AI agent that extracts structured data from a document URL or a data URI.
+ * @fileOverview An AI agent that scans an image/document to read visible text and extract structured fields.
  *
- * - processQuestionDocument - A function that handles the document processing.
+ * - processQuestionDocument - A function that scans the image content and extracts structured fields.
  * - ProcessQuestionDocumentInput - The input type for the processQuestionDocument function.
  * - ProcessQuestionDocumentOutput - The return type for the processQuestionDocument function.
  */
@@ -92,7 +92,7 @@ const processDocumentFlow = ai.defineFlow(
     }
     
     const { output } = await ai.generate({
-      prompt: `You are an expert at extracting structured information from exam papers. Analyze the following document content and extract the required fields. The content is provided as a data URI.
+      prompt: `You are an expert at reading and analyzing exam papers. Scan the image below and read the text visible in it. Extract the required information from what you see in the image.
 
 Document: {{media url="${dataUri}"}}`,
       output: {

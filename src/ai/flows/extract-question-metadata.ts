@@ -36,7 +36,7 @@ const QuestionMetadataSchema = z.object({
 
 export type QuestionMetadata = z.infer<typeof QuestionMetadataSchema>;
 
-// Genkit flow for extracting question metadata from OCR text
+// Genkit flow for scanning text and extracting structured question information
 export const extractQuestionMetadataFlow = ai.defineFlow(
   {
     name: 'extractQuestionMetadata',
