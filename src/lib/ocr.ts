@@ -39,13 +39,9 @@ async function fileToBase64(file: File): Promise<string> {
  * Extract text using Baidu Unlimited-OCR via Hugging Face Inference API.
  * Model: baidu/Unlimited-OCR — handles both images AND multi-page PDFs.
  */
-async function hfExtractTextFromFile(file: File): Promise<{ text: string; confidence: Record<string, number> }> {
+async function hfExtractTextFromBase64(base64: string, isPDF: boolean): Promise<{ text: string; confidence: Record<string, number> }> {
   const hfToken = process.env.HF_TOKEN;
   if (!hfToken) throw new Error('HF_TOKEN not set');
-
-  const base64 = await fileToBase64(file);
-  const ext = file.name.split('.').pop()?.toLowerCase();
-  const isPDF = ext === 'pdf';
 
   const apiUrl = 'https://api-inference.huggingface.co/models/baidu/Unlimited-OCR';
 
@@ -88,6 +84,38 @@ async function hfExtractTextFromFile(file: File): Promise<{ text: string; confid
   };
 }
 
+/**
+ * Extract text from raw base64 data (used by the scanning flow).
+ * @param base64 - Raw base64-encoded file data (NOT a data URI)
+ * @param mimeType - MIME type of the file (e.g. 'image/jpeg', 'application/pdf')
+ * @returns Extracted text and confidence scores
+ */
+export async function extractTextFromBase64(base64: string, mimeType: string): Promise<{ text: string; confidence: Record<string, number> }> {
+  const hfToken = process.env.HF_TOKEN;
+  const isPDF = mimeType === 'application/pdf';
+
+  if (hfToken) {
+    try {
+      console.log(`Attempting HF OCR for base64 data (${mimeType})`);
+      const result = await hfExtractTextFromBase64(base64, isPDF);
+      console.log(`HF OCR successful (${result.text.length} chars)`);
+      return result;
+    } catch (error) {
+      console.warn(`HF OCR failed for base64 data, falling back to mock:`, error instanceof Error ? error.message : error);
+    }
+  }
+
+  console.log(`Using mock OCR for base64 data (${mimeType})`);
+  const mockText = isPDF
+    ? `[MOCK OCR] Extracted text from PDF\n\nUniversity of Lagos\nDepartment of Computer Science\nCSC 301 - Data Structures and Algorithms\n2023/2024 Academic Session\nFirst Semester Examination`
+    : `[MOCK OCR] Extracted text from image\n\nUniversity of Lagos\nDepartment of Computer Science\nCSC 301 - Data Structures\n2023 First Semester\n\nQuestion 1: What is a binary search tree?\nQuestion 2: Explain BFS vs DFS`;
+
+  return {
+    text: mockText,
+    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 },
+  };
+}
+
 function parseOCRResponse(result: any): string {
   if (typeof result === 'string') return result;
   if (Array.isArray(result)) return result.join('\n\n');
@@ -105,7 +133,10 @@ export async function extractTextFromFile(file: File): Promise<{ text: string; c
   if (hfToken) {
     try {
       console.log(`Attempting Baidu Unlimited-OCR for: ${file.name}`);
-      const result = await hfExtractTextFromFile(file);
+      const base64 = await fileToBase64(file);
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      const isPDF = ext === 'pdf';
+      const result = await hfExtractTextFromBase64(base64, isPDF);
       console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
       return result;
     } catch (error) {

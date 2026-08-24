@@ -1,6 +1,9 @@
 /**
  * @fileOverview An AI agent that scans an image/document to read visible text and extract structured fields.
  *
+ * Uses Hugging Face OCR (baidu/Unlimited-OCR) for text extraction, then
+ * Gemini (text-only) for structured metadata extraction.
+ *
  * - processQuestionDocument - A function that scans the image content and extracts structured fields.
  * - ProcessQuestionDocumentInput - The input type for the processQuestionDocument function.
  * - ProcessQuestionDocumentOutput - The return type for the processQuestionDocument function.
@@ -8,6 +11,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { extractTextFromBase64 } from '@/lib/ocr';
 import type { RequestInit, Response } from 'node-fetch';
 
 const ProcessQuestionDocumentInputSchema = z.object({
@@ -24,6 +28,18 @@ const ProcessQuestionDocumentOutputSchema = z.object({
   fullContent: z.string().describe('The full text content extracted from the document.'),
 });
 export type ProcessQuestionDocumentOutput = z.infer<typeof ProcessQuestionDocumentOutputSchema>;
+
+/**
+ * Parses a data URI into its base64 data and MIME type.
+ * Example input: "data:image/jpeg;base64,/9j/4AAQ..."
+ */
+function parseDataUri(dataUri: string): { base64: string; mimeType: string } {
+  const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match || !match[1] || !match[2]) {
+    throw new Error('Invalid data URI format');
+  }
+  return { mimeType: match[1], base64: match[2] };
+}
 
 /**
  * Extracts the Google Drive file ID from a URL.
@@ -86,20 +102,53 @@ const processDocumentFlow = ai.defineFlow(
   async ({ fileUrl }) => {
     let dataUri = fileUrl;
 
-    // Check if the input is a URL and not a data URI
+    // If the input is a URL (not a data URI), fetch it first
     if (fileUrl.startsWith('http')) {
         dataUri = await fetchGoogleDriveFileAsDataUri(fileUrl);
     }
-    
-    const { output } = await ai.generate({
-      prompt: `You are an expert at reading and analyzing exam papers. Scan the image below and read the text visible in it. Extract the required information from what you see in the image.
 
-Document: {{media url="${dataUri}"}}`,
+    // Step 1: Extract text from the image using Hugging Face OCR
+    const { base64, mimeType } = parseDataUri(dataUri);
+    console.log(`Running HF OCR on ${mimeType} data...`);
+
+    const ocrResult = await extractTextFromBase64(base64, mimeType);
+    const ocrText = ocrResult.text;
+
+    console.log(`HF OCR extracted ${ocrText.length} chars. Extracting metadata with Gemini...`);
+
+    // Step 2: Use Gemini (text-only, no image) to extract structured metadata
+    const { output } = await ai.generate({
+      prompt: `You are an expert at parsing academic question papers from Nigerian universities.
+
+Given the following OCR-extracted text from a question paper/document, extract the structured metadata.
+
+OCR Text:
+${ocrText}
+
+Extract the following:
+1. institutionName: The university/institution name
+2. courseName: Course name (e.g. "Data Structures and Algorithms", "Engineering Mathematics")
+3. examYear: The academic year as a single number (the STARTING year of the session, e.g. 2023 for "2023/2024")
+4. semester: "First" or "Second"
+5. fullContent: The complete question text exactly as it appears
+
+Rules:
+- Only extract information that is clearly present in the text
+- For Nigerian universities, recognize common abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, etc.
+- If a year range like "2023/2024" is found, use the starting year (2023)
+- If semester is not stated, default to "First"
+- If course code is present (e.g. "CSC 301"), include it in courseName
+
+Return ONLY valid JSON matching the schema.`,
       output: {
         schema: ProcessQuestionDocumentOutputSchema,
       },
     });
 
-    return output!;
+    if (!output) {
+      throw new Error('Failed to extract metadata from OCR text');
+    }
+
+    return output;
   }
 );
