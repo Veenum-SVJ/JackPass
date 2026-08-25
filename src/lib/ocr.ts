@@ -39,7 +39,7 @@ async function fileToBase64(file: File): Promise<string> {
  * Extract text using Baidu Unlimited-OCR via Hugging Face Inference API.
  * Model: baidu/Unlimited-OCR — handles both images AND multi-page PDFs.
  */
-async function hfExtractTextFromBase64(base64: string, isPDF: boolean): Promise<{ text: string; confidence: Record<string, number> }> {
+async function hfExtractTextFromBase64(base64: string): Promise<{ text: string; confidence: Record<string, number> }> {
   const hfToken = process.env.HF_TOKEN;
   if (!hfToken) throw new Error('HF_TOKEN not set');
 
@@ -88,7 +88,7 @@ export async function extractTextFromBase64(base64: string, mimeType: string): P
   if (hfToken) {
     try {
       console.log(`Attempting HF OCR for base64 data (${mimeType})`);
-      const result = await hfExtractTextFromBase64(base64, isPDF);
+      const result = await hfExtractTextFromBase64(base64);
       console.log(`HF OCR successful (${result.text.length} chars)`);
       return result;
     } catch (error) {
@@ -125,9 +125,7 @@ export async function extractTextFromFile(file: File): Promise<{ text: string; c
     try {
       console.log(`Attempting Baidu Unlimited-OCR for: ${file.name}`);
       const base64 = await fileToBase64(file);
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      const isPDF = ext === 'pdf';
-      const result = await hfExtractTextFromBase64(base64, isPDF);
+      const result = await hfExtractTextFromBase64(base64);
       console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
       return result;
     } catch (error) {

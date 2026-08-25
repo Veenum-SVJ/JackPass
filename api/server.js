@@ -91,7 +91,7 @@ async function fileToBase64(file) {
   const buffer = Buffer.from(arrayBuffer);
   return buffer.toString("base64");
 }
-async function hfExtractTextFromBase64(base64, isPDF) {
+async function hfExtractTextFromBase64(base64) {
   const hfToken = process.env.HF_TOKEN;
   if (!hfToken) throw new Error("HF_TOKEN not set");
   const apiUrl = "https://api-inference.huggingface.co/models/baidu/Unlimited-OCR";
@@ -124,7 +124,7 @@ async function extractTextFromBase64(base64, mimeType) {
   if (hfToken) {
     try {
       console.log(`Attempting HF OCR for base64 data (${mimeType})`);
-      const result = await hfExtractTextFromBase64(base64, isPDF);
+      const result = await hfExtractTextFromBase64(base64);
       console.log(`HF OCR successful (${result.text.length} chars)`);
       return result;
     } catch (error) {
@@ -169,9 +169,7 @@ async function extractTextFromFile(file) {
     try {
       console.log(`Attempting Baidu Unlimited-OCR for: ${file.name}`);
       const base64 = await fileToBase64(file);
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      const isPDF = ext === "pdf";
-      const result = await hfExtractTextFromBase64(base64, isPDF);
+      const result = await hfExtractTextFromBase64(base64);
       console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
       return result;
     } catch (error) {
