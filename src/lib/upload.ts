@@ -1,7 +1,7 @@
 import { createServerSupabase } from './supabase-server';
 import { extractTextFromFile } from './ocr';
 import { v4 as uuidv4 } from 'uuid';
-import { processUploadedQuestionFlow } from '@/ai/flows/process-uploaded-question';
+import { processUploadedQuestionFlow } from '../ai/flows/process-uploaded-question';
 
 /**
  * Process an uploaded file: store in Supabase Storage, run OCR asynchronously, save metadata.

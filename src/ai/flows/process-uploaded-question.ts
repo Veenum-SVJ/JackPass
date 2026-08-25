@@ -1,7 +1,7 @@
-import { ai } from '@/ai/genkit';
+import { ai } from '../genkit';
 import { z } from 'zod';
 import { extractQuestionMetadataFlow } from './extract-question-metadata';
-import { createServerSupabase } from '@/lib/supabase-server';
+import { createServerSupabase } from '../../lib/supabase-server';
 import { v4 as uuidv4 } from 'uuid';
 
 const ProcessUploadedQuestionInputSchema = z.object({

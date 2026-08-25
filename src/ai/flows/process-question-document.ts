@@ -9,9 +9,9 @@
  * - ProcessQuestionDocumentOutput - The return type for the processQuestionDocument function.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai } from '../genkit';
 import { z } from 'zod';
-import { extractTextFromBase64 } from '@/lib/ocr';
+import { extractTextFromBase64 } from '../../lib/ocr';
 import type { RequestInit, Response } from 'node-fetch';
 
 const ProcessQuestionDocumentInputSchema = z.object({
