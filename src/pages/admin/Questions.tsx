@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, FileQuestion, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { QuestionReviewCard } from '@/components/admin/QuestionReviewCard';
 import {
   useAdminQuestions,
@@ -49,28 +49,50 @@ export default function AdminQuestionsPage() {
     }
   };
 
+  const pendingCount = questions.filter(q => q.status === 'pending').length;
+  const approvedCount = questions.filter(q => q.status === 'approved').length;
+  const rejectedCount = questions.filter(q => q.status === 'rejected').length;
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold font-headline">Question Moderation</h1>
-          <p className="text-muted-foreground mt-1">Review and approve pending questions</p>
+    <div className="p-6 space-y-6">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden rounded-2xl">
+        <div aria-hidden className="absolute inset-0 bg-adire text-primary/10" />
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-primary/15 via-primary/5 to-background" />
+        <div className="relative p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 text-primary text-xs font-semibold px-3.5 py-1.5 mb-3 font-headline">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                Moderation
+              </span>
+              <h1 className="text-3xl md:text-4xl font-bold font-headline tracking-tight">
+                Question Moderation
+              </h1>
+              <p className="text-muted-foreground mt-2 max-w-xl">
+                Review and approve questions submitted by students.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="secondary" className="text-sm gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                {pendingCount} Pending
+              </Badge>
+              <Badge variant="default" className="text-sm gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+                <CheckCircle className="h-3.5 w-3.5" />
+                {approvedCount} Approved
+              </Badge>
+              <Badge variant="destructive" className="text-sm gap-1.5">
+                <XCircle className="h-3.5 w-3.5" />
+                {rejectedCount} Rejected
+              </Badge>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary" className="text-sm">
-            {questions.filter(q => q.status === 'pending').length} Pending
-          </Badge>
-          <Badge variant="default" className="text-sm">
-            {questions.filter(q => q.status === 'approved').length} Approved
-          </Badge>
-          <Badge variant="destructive" className="text-sm">
-            {questions.filter(q => q.status === 'rejected').length} Rejected
-          </Badge>
-        </div>
-      </div>
+      </section>
 
       {/* Filters */}
-      <Card className="mb-6">
+      <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
@@ -80,13 +102,13 @@ export default function AdminQuestionsPage() {
                 placeholder="Search questions..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-background"
+                className="w-full pl-10 pr-4 py-2 border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
               />
             </div>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as 'all' | QuestionStatus)}
-              className="border rounded-lg px-4 py-2 bg-background min-w-[150px]"
+              className="border rounded-lg px-4 py-2 bg-background min-w-[150px] focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
             >
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
@@ -96,7 +118,7 @@ export default function AdminQuestionsPage() {
             <select
               value={institutionFilter}
               onChange={e => setInstitutionFilter(e.target.value)}
-              className="border rounded-lg px-4 py-2 bg-background min-w-[200px]"
+              className="border rounded-lg px-4 py-2 bg-background min-w-[200px] focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
             >
               <option value="">All Institutions</option>
               {institutions.map(inst => (
@@ -124,9 +146,18 @@ export default function AdminQuestionsPage() {
           ))}
         </div>
       ) : questions.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">No questions found matching your filters.</p>
+        <Card className="relative overflow-hidden">
+          <div aria-hidden className="absolute inset-0 bg-adire text-primary/5" />
+          <CardContent className="relative py-12 text-center">
+            <div className="bg-primary/10 text-primary p-3 rounded-full mx-auto mb-4 w-fit">
+              <FileQuestion className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-semibold font-headline mb-2">No Questions Found</h3>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              {statusFilter === 'pending' 
+                ? 'All caught up! No pending questions to review.'
+                : 'No questions match your current filters. Try adjusting your search criteria.'}
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -144,7 +175,7 @@ export default function AdminQuestionsPage() {
 
       {moderateQuestion.isPending && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
-          <Badge className="text-sm gap-2">
+          <Badge className="text-sm gap-2 shadow-lg">
             <Loader2 className="h-4 w-4 animate-spin" />
             Updating question...
           </Badge>

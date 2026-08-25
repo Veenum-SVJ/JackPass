@@ -5,6 +5,35 @@ import { requireAdmin } from '../middleware';
 export const adminRouter = Router();
 
 /**
+ * GET /api/admin/stats
+ * Dashboard statistics: total questions, pending, approved, rejected, total users.
+ */
+adminRouter.get('/stats', requireAdmin, async (_req, res) => {
+  try {
+    const supabase = createServerSupabase();
+
+    const [questionsResult, usersResult] = await Promise.all([
+      supabase.from('questions').select('status'),
+      supabase.from('user_profiles').select('id', { count: 'exact', head: true }),
+    ]);
+
+    if (questionsResult.error) throw questionsResult.error;
+
+    const questions = questionsResult.data ?? [];
+    const total = questions.length;
+    const pending = questions.filter((q) => q.status === 'pending').length;
+    const approved = questions.filter((q) => q.status === 'approved').length;
+    const rejected = questions.filter((q) => q.status === 'rejected').length;
+    const totalUsers = usersResult.count ?? 0;
+
+    res.json({ total, pending, approved, rejected, totalUsers });
+  } catch (error: any) {
+    console.error('Error fetching admin stats:', error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
+/**
  * GET /api/admin/questions
  * Fetch questions for moderation. Supports ?search, ?status, ?institution and ?institutions=true.
  */

@@ -28,13 +28,14 @@ const AdminLogin = lazy(() => import('./pages/admin/Login'));
 
 export default function App() {
   const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin') && location.pathname !== '/admin/login';
 
   return (
     <AuthProvider>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
         <div className={cn('font-body antialiased min-h-screen bg-background flex flex-col items-center')}>
-          <Header />
-          <main className="flex-1 container mx-auto px-4 pt-24 pb-28 w-full">
+          {!isAdminRoute && <Header />}
+          <main className={cn('flex-1 w-full', isAdminRoute ? '' : 'container mx-auto px-4 pt-24 pb-28')}>
             <Suspense fallback={<PageSkeleton />}>
               <div
                 key={location.pathname}
@@ -69,7 +70,7 @@ export default function App() {
               </div>
             </Suspense>
           </main>
-          <Footer />
+          {!isAdminRoute && <Footer />}
           <Toaster />
         </div>
       </ThemeProvider>
