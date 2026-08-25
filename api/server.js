@@ -43,148 +43,6 @@ var init_supabase_server = __esm({
   }
 });
 
-// src/lib/ocr.ts
-async function mockExtractTextFromFile(file) {
-  await new Promise((resolve) => setTimeout(resolve, 1e3));
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  let mockText = "";
-  if (ext === "pdf") {
-    mockText = `[MOCK OCR] Extracted text from PDF: ${file.name}
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures and Algorithms
-2023/2024 Academic Session
-First Semester Examination
-
-Instruction: Answer ALL questions
-
-Question 1 (20 marks)
-(a) Define a binary search tree and explain its properties.
-(b) Write an algorithm to insert a node into a BST.
-(c) What is the time complexity of search operation in a BST?
-
-Question 2 (20 marks)
-(a) Explain the difference between BFS and DFS traversal.
-(b) Apply DFS to the following graph starting from vertex A.
-(c) What are the applications of BFS in real-world scenarios?`;
-  } else if (ext === "jpg" || ext === "jpeg" || ext === "png") {
-    mockText = `[MOCK OCR] Extracted text from image: ${file.name}
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures
-2023 First Semester
-
-Question 1: What is a binary search tree?
-Question 2: Explain BFS vs DFS`;
-  } else {
-    mockText = `Unsupported file type for OCR: ${ext}. Please upload PDF or image files.`;
-  }
-  return {
-    text: mockText,
-    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
-  };
-}
-async function fileToBase64(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return buffer.toString("base64");
-}
-async function hfExtractTextFromBase64(base64) {
-  const hfToken = process.env.HF_TOKEN;
-  if (!hfToken) throw new Error("HF_TOKEN not set");
-  const apiUrl = "https://api-inference.huggingface.co/models/baidu/Unlimited-OCR";
-  const binaryData = Buffer.from(base64, "base64");
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${hfToken}`,
-      "Content-Type": "application/octet-stream"
-    },
-    body: binaryData
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`HF API error (${response.status}): ${errorText}`);
-  }
-  const result = await response.json();
-  const extractedText = parseOCRResponse(result);
-  if (!extractedText || extractedText.trim().length < 10) {
-    throw new Error("OCR returned empty or very short text");
-  }
-  return {
-    text: extractedText,
-    confidence: { overall: 0.9, institution: 0.85, course: 0.85, year: 0.9, semester: 0.9, type: 0.85 }
-  };
-}
-async function extractTextFromBase64(base64, mimeType) {
-  const hfToken = process.env.HF_TOKEN;
-  const isPDF = mimeType === "application/pdf";
-  if (hfToken) {
-    try {
-      console.log(`Attempting HF OCR for base64 data (${mimeType})`);
-      const result = await hfExtractTextFromBase64(base64);
-      console.log(`HF OCR successful (${result.text.length} chars)`);
-      return result;
-    } catch (error) {
-      console.warn(`HF OCR failed for base64 data, falling back to mock:`, error instanceof Error ? error.message : error);
-    }
-  }
-  console.log(`Using mock OCR for base64 data (${mimeType})`);
-  const mockText = isPDF ? `[MOCK OCR] Extracted text from PDF
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures and Algorithms
-2023/2024 Academic Session
-First Semester Examination` : `[MOCK OCR] Extracted text from image
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures
-2023 First Semester
-
-Question 1: What is a binary search tree?
-Question 2: Explain BFS vs DFS`;
-  return {
-    text: mockText,
-    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
-  };
-}
-function parseOCRResponse(result) {
-  if (typeof result === "string") return result;
-  if (Array.isArray(result)) return result.join("\n\n");
-  if (result?.generated_text) return result.generated_text;
-  if (result?.[0]?.generated_text) return result[0].generated_text;
-  try {
-    return JSON.stringify(result);
-  } catch {
-    return "Failed to parse OCR response";
-  }
-}
-async function extractTextFromFile(file) {
-  const hfToken = process.env.HF_TOKEN;
-  if (hfToken) {
-    try {
-      console.log(`Attempting Baidu Unlimited-OCR for: ${file.name}`);
-      const base64 = await fileToBase64(file);
-      const result = await hfExtractTextFromBase64(base64);
-      console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
-      return result;
-    } catch (error) {
-      console.warn(`HF OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
-    }
-  }
-  console.log(`Using mock OCR for: ${file.name}`);
-  return mockExtractTextFromFile(file);
-}
-var init_ocr = __esm({
-  "src/lib/ocr.ts"() {
-    "use strict";
-  }
-});
-
 // src/ai/genkit.ts
 import { genkit } from "genkit";
 import { googleAI } from "@genkit-ai/googleai";
@@ -198,7 +56,7 @@ var init_genkit = __esm({
           apiKey: process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY
         })
       ],
-      model: "googleai/gemini-2.5-flash"
+      model: "googleai/gemini-3.6-flash"
     });
   }
 });
@@ -426,7 +284,6 @@ async function fetchGoogleDriveFileAsDataUri(fileUrl) {
   const fetch2 = (await import("node-fetch")).default;
   const response = await fetch2(downloadUrl, {
     headers: {
-      // A user-agent is often required for such requests to succeed.
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
   });
@@ -446,7 +303,6 @@ var init_process_question_document = __esm({
   "src/ai/flows/process-question-document.ts"() {
     "use strict";
     init_genkit();
-    init_ocr();
     ProcessQuestionDocumentInputSchema = z3.object({
       // A URL or a Data URI
       fileUrl: z3.string().describe("The public Google Drive URL or a Data URI of the question paper.")
@@ -470,40 +326,44 @@ var init_process_question_document = __esm({
           dataUri = await fetchGoogleDriveFileAsDataUri(fileUrl);
         }
         const { base64, mimeType } = parseDataUri(dataUri);
-        console.log(`Running HF OCR on ${mimeType} data...`);
-        const ocrResult = await extractTextFromBase64(base64, mimeType);
-        const ocrText = ocrResult.text;
-        console.log(`HF OCR extracted ${ocrText.length} chars. Extracting metadata with Gemini...`);
+        console.log(`Sending image to Gemini for OCR + metadata extraction (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)...`);
         const { output } = await ai.generate({
-          prompt: `You are an expert at parsing academic question papers from Nigerian universities.
+          prompt: [
+            {
+              text: `You are an expert at reading academic question papers from Nigerian universities.
 
-Given the following OCR-extracted text from a question paper/document, extract the structured metadata.
-
-OCR Text:
-${ocrText}
+Look at this image of a question paper and:
+1. Read ALL the text visible in the image (this is the fullContent field)
+2. Extract structured metadata from the text
 
 Extract the following:
-1. institutionName: The university/institution name
-2. courseName: Course name (e.g. "Data Structures and Algorithms", "Engineering Mathematics")
-3. examYear: The academic year as a single number (the STARTING year of the session, e.g. 2023 for "2023/2024")
-4. semester: "First" or "Second"
-5. fullContent: The complete question text exactly as it appears
+- institutionName: The university/institution name
+- courseName: Course name with code if present (e.g. "CSC 301 - Data Structures and Algorithms")
+- examYear: The academic year as a single number (the STARTING year of the session, e.g. 2023 for "2023/2024")
+- semester: "First" or "Second"
+- fullContent: The COMPLETE question text exactly as it appears in the image \u2014 do not summarize, transcribe everything
 
 Rules:
-- Only extract information that is clearly present in the text
-- For Nigerian universities, recognize common abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, etc.
+- Read the text carefully from the image \u2014 do not guess or make up content
+- For Nigerian universities, recognize common abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, UNN, OOU, etc.
 - If a year range like "2023/2024" is found, use the starting year (2023)
 - If semester is not stated, default to "First"
-- If course code is present (e.g. "CSC 301"), include it in courseName
-
-Return ONLY valid JSON matching the schema.`,
+- fullContent must contain the complete transcribed text from the image`
+            },
+            {
+              media: {
+                url: `data:${mimeType};base64,${base64}`
+              }
+            }
+          ],
           output: {
             schema: ProcessQuestionDocumentOutputSchema
           }
         });
         if (!output) {
-          throw new Error("Failed to extract metadata from OCR text");
+          throw new Error("Failed to extract metadata from document image");
         }
+        console.log(`Gemini extracted: institution=${output.institutionName}, course=${output.courseName}, year=${output.examYear}`);
         return output;
       }
     );
@@ -738,7 +598,111 @@ import multer from "multer";
 
 // src/lib/upload.ts
 init_supabase_server();
-init_ocr();
+
+// src/lib/ocr.ts
+async function mockExtractTextFromFile(file) {
+  await new Promise((resolve) => setTimeout(resolve, 1e3));
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  let mockText = "";
+  if (ext === "pdf") {
+    mockText = `[MOCK OCR] Extracted text from PDF: ${file.name}
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures and Algorithms
+2023/2024 Academic Session
+First Semester Examination
+
+Instruction: Answer ALL questions
+
+Question 1 (20 marks)
+(a) Define a binary search tree and explain its properties.
+(b) Write an algorithm to insert a node into a BST.
+(c) What is the time complexity of search operation in a BST?
+
+Question 2 (20 marks)
+(a) Explain the difference between BFS and DFS traversal.
+(b) Apply DFS to the following graph starting from vertex A.
+(c) What are the applications of BFS in real-world scenarios?`;
+  } else if (ext === "jpg" || ext === "jpeg" || ext === "png") {
+    mockText = `[MOCK OCR] Extracted text from image: ${file.name}
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures
+2023 First Semester
+
+Question 1: What is a binary search tree?
+Question 2: Explain BFS vs DFS`;
+  } else {
+    mockText = `Unsupported file type for OCR: ${ext}. Please upload PDF or image files.`;
+  }
+  return {
+    text: mockText,
+    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
+  };
+}
+async function fileToBase64(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  return buffer.toString("base64");
+}
+async function hfExtractTextFromBase64(base64) {
+  const hfToken = process.env.HF_TOKEN;
+  if (!hfToken) throw new Error("HF_TOKEN not set");
+  const apiUrl = "https://api-inference.huggingface.co/models/baidu/Unlimited-OCR";
+  const binaryData = Buffer.from(base64, "base64");
+  const response = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${hfToken}`,
+      "Content-Type": "application/octet-stream"
+    },
+    body: binaryData
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`HF API error (${response.status}): ${errorText}`);
+  }
+  const result = await response.json();
+  const extractedText = parseOCRResponse(result);
+  if (!extractedText || extractedText.trim().length < 10) {
+    throw new Error("OCR returned empty or very short text");
+  }
+  return {
+    text: extractedText,
+    confidence: { overall: 0.9, institution: 0.85, course: 0.85, year: 0.9, semester: 0.9, type: 0.85 }
+  };
+}
+function parseOCRResponse(result) {
+  if (typeof result === "string") return result;
+  if (Array.isArray(result)) return result.join("\n\n");
+  if (result?.generated_text) return result.generated_text;
+  if (result?.[0]?.generated_text) return result[0].generated_text;
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return "Failed to parse OCR response";
+  }
+}
+async function extractTextFromFile(file) {
+  const hfToken = process.env.HF_TOKEN;
+  if (hfToken) {
+    try {
+      console.log(`Attempting Baidu Unlimited-OCR for: ${file.name}`);
+      const base64 = await fileToBase64(file);
+      const result = await hfExtractTextFromBase64(base64);
+      console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
+      return result;
+    } catch (error) {
+      console.warn(`HF OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
+    }
+  }
+  console.log(`Using mock OCR for: ${file.name}`);
+  return mockExtractTextFromFile(file);
+}
+
+// src/lib/upload.ts
 init_process_uploaded_question();
 import { v4 as uuidv42 } from "uuid";
 async function processQuestionUpload(file, uploaderId, _metadata = {}) {
