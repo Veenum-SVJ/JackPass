@@ -1,16 +1,14 @@
 /**
- * Vercel serverless entry point — self-contained Express app.
+ * Vercel serverless entry point — fully self-contained Express app.
  *
- * Vercel invokes this as a single serverless function for all /api/* routes.
- * In dev, use `npm run dev` (Express runs directly on port 9001).
- *
- * NOTE: This file inlines the Express app setup because Vercel's serverless
- * runtime cannot resolve imports outside the api/ directory (e.g. ../server/app).
+ * Vercel's serverless runtime cannot resolve imports outside the api/
+ * directory, so this file inlines the entire Express setup.
+ * For local dev, use `npm run dev` (Express on port 9001 via server/index.ts).
  */
-import './load-env';
-
 import express from 'express';
 
+// ── Route imports (relative paths within the project) ────────────────────────
+// These compile to JS by Vercel's esbuild and resolve at deploy time.
 import { questionsRouter } from '../server/routes/questions';
 import { adminRouter } from '../server/routes/admin';
 import { uploadRouter } from '../server/routes/upload';
@@ -26,8 +24,8 @@ import { lecturerPhotosRouter } from '../server/routes/lecturer-photos';
 const app = express();
 app.disable('x-powered-by');
 
-// Parse JSON bodies for API routes (limit raised for base64 data URIs).
-// The Paystack webhook must receive the RAW body so its HMAC signature can be verified.
+// Parse JSON bodies (limit raised for base64 data URIs).
+// Paystack webhook needs RAW body for HMAC verification.
 app.use((req, res, next) => {
   if (req.path === '/api/payments/webhook') {
     express.raw({ type: '*/*' })(req, res, next);
