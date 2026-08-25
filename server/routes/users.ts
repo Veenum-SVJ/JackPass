@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { mapQuestionRow, type QuestionRow } from '@/lib/mappers';
-import { normalizeSupabaseUrl } from '@/lib/supabase-utils';
+import { mapQuestionRow, type QuestionRow } from '../../src/lib/mappers';
+import { normalizeSupabaseUrl } from '../../src/lib/supabase-utils';
 
 const serviceClient = createClient(
   normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL!),

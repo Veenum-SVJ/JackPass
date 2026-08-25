@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware';
-import { processQuestionUpload, processLinkImport, getUploadStatus } from '@/lib/upload';
+import { processQuestionUpload, processLinkImport, getUploadStatus } from '../../src/lib/upload';
 
 const upload = multer({
   storage: multer.memoryStorage(),

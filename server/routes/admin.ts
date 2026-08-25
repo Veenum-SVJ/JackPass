@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createServerSupabase } from '@/lib/supabase-server';
+import { createServerSupabase } from '../../src/lib/supabase-server';
 import { requireAdmin } from '../middleware';
 
 export const adminRouter = Router();

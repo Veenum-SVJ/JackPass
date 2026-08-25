@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { initializePayment, verifyPayment, generatePaymentReference, verifyWebhookSignature } from '@/lib/paystack';
-import { SUBSCRIPTION_PLANS, SubscriptionTier } from '@/lib/subscription';
-import { createServerSupabase } from '@/lib/supabase-server';
+import { initializePayment, verifyPayment, generatePaymentReference, verifyWebhookSignature } from '../../src/lib/paystack';
+import { SUBSCRIPTION_PLANS, SubscriptionTier } from '../../src/lib/subscription';
+import { createServerSupabase } from '../../src/lib/supabase-server';
 import { requireAuth } from '../middleware';
 
 export const paymentsRouter = Router();

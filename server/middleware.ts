@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
-import { isUserAdmin } from '@/lib/supabase-server';
-import { normalizeSupabaseUrl } from '@/lib/supabase-utils';
+import { isUserAdmin } from '../src/lib/supabase-server';
+import { normalizeSupabaseUrl } from '../src/lib/supabase-utils';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

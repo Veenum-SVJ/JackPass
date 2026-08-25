@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware';
-import { createServerSupabase } from '@/lib/supabase-server';
+import { createServerSupabase } from '../../src/lib/supabase-server';
 
 const upload = multer({
   storage: multer.memoryStorage(),

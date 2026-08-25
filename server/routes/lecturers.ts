@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware';
-import { createServerSupabase } from '@/lib/supabase-server';
+import { createServerSupabase } from '../../src/lib/supabase-server';
 
 export const lecturersRouter = Router();
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { createServerSupabase } from '@/lib/supabase-server';
-import { mapQuestionRow, type QuestionRow } from '@/lib/mappers';
+import { createServerSupabase } from '../../src/lib/supabase-server';
+import { mapQuestionRow, type QuestionRow } from '../../src/lib/mappers';
 
 export const questionsRouter = Router();
 

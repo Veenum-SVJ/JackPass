@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { processQuestionDocument } from '@/ai/flows/process-question-document';
+import { processQuestionDocument } from '../../src/ai/flows/process-question-document';
 
 export const aiRouter = Router();
 
