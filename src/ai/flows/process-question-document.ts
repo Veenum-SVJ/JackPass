@@ -24,7 +24,7 @@ const ProcessQuestionDocumentOutputSchema = z.object({
   institutionName: z.string().describe('The full name of the institution.'),
   courseName: z.string().describe('The name of the course without the code, e.g. "Data Structures and Algorithms"'),
   courseCode: z.string().optional().describe('The course code if present, e.g. "CSC 301"'),
-  examYear: z.number().describe('The year the exam was taken.'),
+  academicSession: z.string().describe('The academic session in YYYY/YYYY format, e.g. "2023/2024".'),
   semester: z.enum(['First', 'Second']).describe('The semester for the exam.'),
   fullContent: z.string().describe('The full text content extracted from the document.'),
 });
@@ -115,14 +115,15 @@ Read the image carefully and return:
 - institutionName: The full university/institution name (e.g. "University of Lagos")
 - courseName: Course name WITHOUT the code (e.g. "Data Structures and Algorithms")
 - courseCode: The course code if visible (e.g. "CSC 301")
-- examYear: The starting year as a number (e.g. 2023 for "2023/2024")
+- academicSession: The academic session in YYYY/YYYY format (e.g. "2023/2024" for "2023/2024 Academic Session")
 - semester: "First" or "Second"
 - fullContent: ALL text visible in the image, transcribed exactly as it appears
 
 Rules:
 - Transcribe text faithfully from the image — do not guess or fabricate
 - For Nigerian universities, recognize abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, UNN, OOU, etc.
-- If year range like "2023/2024", use starting year (2023)
+- If year range like "2023/2024", return it as "2023/2024"
+- If only a single year is found (e.g. "2023"), return it as "2023/2024" (assume same academic year)
 - If semester not stated, default to "First"
 - Return ONLY valid JSON matching the schema`,
         },
@@ -138,7 +139,7 @@ Rules:
     });
 
     const elapsed = Date.now() - startTime;
-    console.log(`Gemini responded in ${elapsed}ms: institution=${output?.institutionName}, course=${output?.courseName}, code=${output?.courseCode}`);
+    console.log(`Gemini responded in ${elapsed}ms: institution=${output?.institutionName}, course=${output?.courseName}, code=${output?.courseCode}, session=${output?.academicSession}`);
 
     if (!output) {
       throw new Error('Failed to extract metadata from document image');

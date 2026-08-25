@@ -26,7 +26,7 @@ export interface ProcessDocumentResult {
   institutionName: string;
   courseName: string;
   courseCode?: string;
-  examYear: number;
+  academicSession: string;
   semester: 'First' | 'Second';
   fullContent: string;
 }

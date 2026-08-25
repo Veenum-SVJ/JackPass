@@ -39,6 +39,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useProcessDocument, useUploadQuestion } from '@/hooks/useUpload';
 import { compressImage } from '@/lib/compressImage';
+import { fuzzyMatchInstitution } from '@/lib/fuzzyMatch';
 
 const fileSchema = z.custom<FileList>()
   .refine((files) => files && files.length > 0, 'At least one file is required.')
@@ -54,7 +55,7 @@ const formSchema = z.object({
   institution: z.string().min(1, 'Please select an institution.'),
   course: z.string().min(1, 'Please enter a course name.'),
   courseCode: z.string().optional(),
-  year: z.string().min(1, 'Academic year is required'),
+  year: z.string().min(1, 'Academic session is required'),
   semester: z.enum(['First', 'Second']),
   questionFiles: fileSchema.optional(),
   fileUrl: z.string().url("Please enter a valid URL.").or(z.literal('')).optional(),
@@ -144,10 +145,13 @@ export function UploadDialog() {
       try {
         // Run the Genkit document flow on the server (keeps API keys off the client)
         const result = await processDocument.mutateAsync({ fileUrl: dataUri });
-        if (result.institutionName) form.setValue('institution', result.institutionName, { shouldValidate: true });
+        if (result.institutionName) {
+          const matched = fuzzyMatchInstitution(result.institutionName, institutions);
+          form.setValue('institution', matched || result.institutionName, { shouldValidate: true });
+        }
         if (result.courseName) form.setValue('course', result.courseName, { shouldValidate: true });
         if (result.courseCode) form.setValue('courseCode', result.courseCode, { shouldValidate: true });
-        if (result.examYear) form.setValue('year', String(result.examYear), { shouldValidate: true });
+        if (result.academicSession) form.setValue('year', result.academicSession, { shouldValidate: true });
         if (result.semester) form.setValue('semester', result.semester, { shouldValidate: true });
         toast({
           title: 'Image Scanned!',
@@ -185,10 +189,11 @@ export function UploadDialog() {
     });
     try {
       const result = await processDocument.mutateAsync({ fileUrl: linkValue });
-      form.setValue('institution', result.institutionName, { shouldValidate: true });
+      const matchedInst = fuzzyMatchInstitution(result.institutionName, institutions);
+      form.setValue('institution', matchedInst || result.institutionName, { shouldValidate: true });
       form.setValue('course', result.courseName, { shouldValidate: true });
       if (result.courseCode) form.setValue('courseCode', result.courseCode, { shouldValidate: true });
-      form.setValue('year', String(result.examYear), { shouldValidate: true });
+      form.setValue('year', result.academicSession, { shouldValidate: true });
       form.setValue('semester', result.semester, { shouldValidate: true });
       form.setValue('fileUrl', linkValue, { shouldValidate: true });
       form.setValue('questionFiles', undefined);
@@ -457,7 +462,7 @@ export function UploadDialog() {
                 name="year"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Academic Year</FormLabel>
+                    <FormLabel>Academic Session</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g., 2025/2026" {...field} />
                     </FormControl>
