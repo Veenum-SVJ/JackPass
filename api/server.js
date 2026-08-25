@@ -95,25 +95,14 @@ async function hfExtractTextFromBase64(base64, isPDF) {
   const hfToken = process.env.HF_TOKEN;
   if (!hfToken) throw new Error("HF_TOKEN not set");
   const apiUrl = "https://api-inference.huggingface.co/models/baidu/Unlimited-OCR";
+  const binaryData = Buffer.from(base64, "base64");
   const response = await fetch(apiUrl, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${hfToken}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/octet-stream"
     },
-    body: JSON.stringify({
-      inputs: base64,
-      parameters: {
-        base_size: 1024,
-        image_size: isPDF ? 1024 : 640,
-        crop_mode: !isPDF,
-        max_length: 32768,
-        no_repeat_ngram_size: 35,
-        ngram_window: 128,
-        save_results: false
-      },
-      options: { wait_for_model: true }
-    })
+    body: binaryData
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -211,7 +200,7 @@ var init_genkit = __esm({
           apiKey: process.env.GOOGLE_AI_API_KEY || process.env.GOOGLE_API_KEY
         })
       ],
-      model: "googleai/gemini-2.0-flash"
+      model: "googleai/gemini-2.5-flash"
     });
   }
 });

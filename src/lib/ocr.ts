@@ -45,25 +45,16 @@ async function hfExtractTextFromBase64(base64: string, isPDF: boolean): Promise<
 
   const apiUrl = 'https://api-inference.huggingface.co/models/baidu/Unlimited-OCR';
 
+  // Decode base64 to raw binary — HF Inference API expects binary data for image models
+  const binaryData = Buffer.from(base64, 'base64');
+
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${hfToken}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/octet-stream',
     },
-    body: JSON.stringify({
-      inputs: base64,
-      parameters: {
-        base_size: 1024,
-        image_size: isPDF ? 1024 : 640,
-        crop_mode: !isPDF,
-        max_length: 32768,
-        no_repeat_ngram_size: 35,
-        ngram_window: 128,
-        save_results: false,
-      },
-      options: { wait_for_model: true },
-    }),
+    body: binaryData,
   });
 
   if (!response.ok) {
