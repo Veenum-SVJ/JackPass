@@ -529,6 +529,7 @@ async function requireAdmin(req, res, next) {
 
 // server/routes/admin.ts
 var adminRouter = Router2();
+var adminUsersRouter = Router2();
 adminRouter.get("/stats", requireAdmin, async (_req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -610,6 +611,74 @@ adminRouter.post("/:id/:action", requireAdmin, async (req, res) => {
   } catch (error) {
     console.error(`Error ${action}ing question:`, error);
     res.status(500).json({ error: error.message || `Failed to ${action} question` });
+  }
+});
+adminUsersRouter.get("/", requireAdmin, async (req, res) => {
+  try {
+    const supabase = createServerSupabase();
+    const search = typeof req.query.search === "string" ? req.query.search : void 0;
+    let query = supabase.from("user_profiles").select("*").order("created_at", { ascending: false });
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,id.ilike.%${search}%`);
+    }
+    const { data: profiles, error: profileError } = await query.limit(100);
+    if (profileError) throw profileError;
+    const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+    if (authError) throw authError;
+    const authUserMap = new Map((authUsers?.users ?? []).map((u) => [u.id, u]));
+    const users = (profiles ?? []).map((profile) => {
+      const authUser = authUserMap.get(profile.id);
+      return {
+        ...profile,
+        email: authUser?.email ?? "Unknown",
+        last_sign_in: authUser?.last_sign_in_at ?? null,
+        email_confirmed: authUser?.email_confirmed_at != null
+      };
+    });
+    const filtered = search ? users.filter(
+      (u) => u.email.toLowerCase().includes(search.toLowerCase()) || (u.name ?? "").toLowerCase().includes(search.toLowerCase())
+    ) : users;
+    res.json(filtered);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
+});
+adminUsersRouter.post("/:id/promote", requireAdmin, async (req, res) => {
+  const userId = String(req.params.id);
+  try {
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("user_profiles").update({ is_admin: true }).eq("id", userId).select().single();
+    if (error) throw error;
+    if (!data) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.json({ success: true, user: data, message: "User promoted to admin" });
+  } catch (error) {
+    console.error("Error promoting user:", error);
+    res.status(500).json({ error: error.message || "Failed to promote user" });
+  }
+});
+adminUsersRouter.post("/:id/demote", requireAdmin, async (req, res) => {
+  const userId = String(req.params.id);
+  const currentUser = res.locals.user;
+  try {
+    if (userId === currentUser.id) {
+      res.status(400).json({ error: "You cannot remove your own admin privileges" });
+      return;
+    }
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("user_profiles").update({ is_admin: false }).eq("id", userId).select().single();
+    if (error) throw error;
+    if (!data) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.json({ success: true, user: data, message: "Admin privileges removed" });
+  } catch (error) {
+    console.error("Error demoting user:", error);
+    res.status(500).json({ error: error.message || "Failed to demote user" });
   }
 });
 
@@ -1674,6 +1743,7 @@ app.get("/api/health", (_req, res) => {
 });
 app.use("/api/questions", questionsRouter);
 app.use("/api/admin/questions", adminRouter);
+app.use("/api/admin/users", adminUsersRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/users", usersRouter);

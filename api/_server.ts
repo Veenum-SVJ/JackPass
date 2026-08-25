@@ -10,7 +10,7 @@ import express from 'express';
 // ── Route imports (relative paths within the project) ────────────────────────
 // These compile to JS by Vercel's esbuild and resolve at deploy time.
 import { questionsRouter } from '../server/routes/questions';
-import { adminRouter } from '../server/routes/admin';
+import { adminRouter, adminUsersRouter } from '../server/routes/admin';
 import { uploadRouter } from '../server/routes/upload';
 import { paymentsRouter } from '../server/routes/payments';
 import { usersRouter } from '../server/routes/users';
@@ -40,6 +40,7 @@ app.get('/api/health', (_req, res) => {
 });
 app.use('/api/questions', questionsRouter);
 app.use('/api/admin/questions', adminRouter);
+app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/users', usersRouter);

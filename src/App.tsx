@@ -24,6 +24,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminQuestions = lazy(() => import('./pages/admin/Questions'));
+const AdminUsers = lazy(() => import('./pages/admin/Users'));
 const AdminLogin = lazy(() => import('./pages/admin/Login'));
 
 export default function App() {
@@ -64,6 +65,7 @@ export default function App() {
                   <Route index element={<Navigate to="/admin/questions" replace />} />
                   <Route path="dashboard" element={<AdminDashboard />} />
                   <Route path="questions" element={<AdminQuestions />} />
+                  <Route path="users" element={<AdminUsers />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

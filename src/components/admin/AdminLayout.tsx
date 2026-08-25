@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
   FileQuestion,
+  Users,
   Shield,
   ArrowLeft,
   LogOut,
@@ -28,6 +29,7 @@ import {
 const navItems = [
   { title: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
   { title: 'Questions', icon: FileQuestion, href: '/admin/questions' },
+  { title: 'Users', icon: Users, href: '/admin/users' },
 ];
 
 export default function AdminLayout() {
