@@ -6,8 +6,8 @@
  * Non-image files (e.g. PDFs) are returned unchanged.
  */
 
-const DEFAULT_MAX_WIDTH = 1024;
-const DEFAULT_QUALITY = 0.8;
+const DEFAULT_MAX_WIDTH = 768;
+const DEFAULT_QUALITY = 0.75;
 
 export async function compressImage(
   file: File,

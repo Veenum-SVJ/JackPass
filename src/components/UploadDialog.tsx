@@ -146,6 +146,7 @@ export function UploadDialog() {
         const result = await processDocument.mutateAsync({ fileUrl: dataUri });
         if (result.institutionName) form.setValue('institution', result.institutionName, { shouldValidate: true });
         if (result.courseName) form.setValue('course', result.courseName, { shouldValidate: true });
+        if (result.courseCode) form.setValue('courseCode', result.courseCode, { shouldValidate: true });
         if (result.examYear) form.setValue('year', String(result.examYear), { shouldValidate: true });
         if (result.semester) form.setValue('semester', result.semester, { shouldValidate: true });
         toast({
@@ -186,6 +187,7 @@ export function UploadDialog() {
       const result = await processDocument.mutateAsync({ fileUrl: linkValue });
       form.setValue('institution', result.institutionName, { shouldValidate: true });
       form.setValue('course', result.courseName, { shouldValidate: true });
+      if (result.courseCode) form.setValue('courseCode', result.courseCode, { shouldValidate: true });
       form.setValue('year', String(result.examYear), { shouldValidate: true });
       form.setValue('semester', result.semester, { shouldValidate: true });
       form.setValue('fileUrl', linkValue, { shouldValidate: true });

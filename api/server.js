@@ -308,8 +308,9 @@ var init_process_question_document = __esm({
       fileUrl: z3.string().describe("The public Google Drive URL or a Data URI of the question paper.")
     });
     ProcessQuestionDocumentOutputSchema = z3.object({
-      institutionName: z3.string().describe("The name of the institution."),
-      courseName: z3.string().describe("The name of the course."),
+      institutionName: z3.string().describe("The full name of the institution."),
+      courseName: z3.string().describe('The name of the course without the code, e.g. "Data Structures and Algorithms"'),
+      courseCode: z3.string().optional().describe('The course code if present, e.g. "CSC 301"'),
       examYear: z3.number().describe("The year the exam was taken."),
       semester: z3.enum(["First", "Second"]).describe("The semester for the exam."),
       fullContent: z3.string().describe("The full text content extracted from the document.")
@@ -326,29 +327,27 @@ var init_process_question_document = __esm({
           dataUri = await fetchGoogleDriveFileAsDataUri(fileUrl);
         }
         const { base64, mimeType } = parseDataUri(dataUri);
-        console.log(`Sending image to Gemini for OCR + metadata extraction (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)...`);
+        console.log(`Sending image to Gemini vision (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)...`);
+        const startTime = Date.now();
         const { output } = await ai.generate({
           prompt: [
             {
-              text: `You are an expert at reading academic question papers from Nigerian universities.
+              text: `Extract structured metadata from this academic question paper image.
 
-Look at this image of a question paper and:
-1. Read ALL the text visible in the image (this is the fullContent field)
-2. Extract structured metadata from the text
-
-Extract the following:
-- institutionName: The university/institution name
-- courseName: Course name with code if present (e.g. "CSC 301 - Data Structures and Algorithms")
-- examYear: The academic year as a single number (the STARTING year of the session, e.g. 2023 for "2023/2024")
+Read the image carefully and return:
+- institutionName: The full university/institution name (e.g. "University of Lagos")
+- courseName: Course name WITHOUT the code (e.g. "Data Structures and Algorithms")
+- courseCode: The course code if visible (e.g. "CSC 301")
+- examYear: The starting year as a number (e.g. 2023 for "2023/2024")
 - semester: "First" or "Second"
-- fullContent: The COMPLETE question text exactly as it appears in the image \u2014 do not summarize, transcribe everything
+- fullContent: ALL text visible in the image, transcribed exactly as it appears
 
 Rules:
-- Read the text carefully from the image \u2014 do not guess or make up content
-- For Nigerian universities, recognize common abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, UNN, OOU, etc.
-- If a year range like "2023/2024" is found, use the starting year (2023)
-- If semester is not stated, default to "First"
-- fullContent must contain the complete transcribed text from the image`
+- Transcribe text faithfully from the image \u2014 do not guess or fabricate
+- For Nigerian universities, recognize abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, UNN, OOU, etc.
+- If year range like "2023/2024", use starting year (2023)
+- If semester not stated, default to "First"
+- Return ONLY valid JSON matching the schema`
             },
             {
               media: {
@@ -360,10 +359,11 @@ Rules:
             schema: ProcessQuestionDocumentOutputSchema
           }
         });
+        const elapsed = Date.now() - startTime;
+        console.log(`Gemini responded in ${elapsed}ms: institution=${output?.institutionName}, course=${output?.courseName}, code=${output?.courseCode}`);
         if (!output) {
           throw new Error("Failed to extract metadata from document image");
         }
-        console.log(`Gemini extracted: institution=${output.institutionName}, course=${output.courseName}, year=${output.examYear}`);
         return output;
       }
     );
