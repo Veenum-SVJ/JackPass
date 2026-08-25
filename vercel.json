@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx esbuild api/_server.ts --bundle --platform=node --format=esm --outfile=api/server.js --external:express --external:@supabase/* --external:@genkit-ai/* --external:genkit --external:multer --external:zod --external:uuid --external:dotenv --external:node-fetch && npm run build",
+  "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "framework": null,
