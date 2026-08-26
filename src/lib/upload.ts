@@ -352,7 +352,7 @@ export async function processQuestionUploadMulti(
   const uploadRecords: Array<{ id: string; file_url: string; file_name: string }> = [];
 
   for (let i = 0; i < files.length; i++) {
-    const file = files[i];
+    const file = files[i]!;
     const fileExt = file.name.split('.').pop();
     const storageFileName = `${uploaderId}/${uuidv4()}.${fileExt}`;
 
@@ -412,9 +412,11 @@ export async function processQuestionUploadMulti(
 
   for (let i = 0; i < files.length; i++) {
     try {
-      console.log(`Running OCR on page ${i + 1}/${pageCount} (${files[i].name})...`);
-      const { text, confidence } = await extractTextFromFile(files[i]);
-      ocrResults.push({ text, confidence: confidence.overall, pageIndex: i });
+      const currentFile = files[i]!;
+      const currentUpload = uploadRecords[i]!;
+      console.log(`Running OCR on page ${i + 1}/${pageCount} (${currentFile.name})...`);
+      const { text, confidence } = await extractTextFromFile(currentFile);
+      ocrResults.push({ text, confidence: confidence.overall ?? 0.8, pageIndex: i });
 
       // Update upload record with OCR results
       await supabase
@@ -425,7 +427,7 @@ export async function processQuestionUploadMulti(
           ocr_confidence: JSON.stringify({ overall: confidence.overall }),
           processed_at: new Date().toISOString(),
         })
-        .eq('id', uploadRecords[i].id);
+        .eq('id', currentUpload.id);
 
       console.log(`OCR completed for page ${i + 1}: ${text.length} chars`);
     } catch (ocrError) {
@@ -437,7 +439,7 @@ export async function processQuestionUploadMulti(
           ocr_text: `OCR failed: ${ocrError instanceof Error ? ocrError.message : 'Unknown error'}`,
           processed_at: new Date().toISOString(),
         })
-        .eq('id', uploadRecords[i].id);
+        .eq('id', uploadRecords[i]!.id);
     }
   }
 
@@ -447,17 +449,13 @@ export async function processQuestionUploadMulti(
     .map((r, idx) => `--- PAGE ${idx + 1} ---\n${r.text}`)
     .join('\n\n');
 
-  const avgConfidence = ocrResults.length > 0
-    ? ocrResults.reduce((sum, r) => sum + r.confidence, 0) / ocrResults.length
-    : 0;
-
   // 4. Create ONE question with all pages combined
   // Fire-and-forget AI extraction (creates the question record)
-  const primaryUpload = uploadRecords[0];
+  const primaryUpload = uploadRecords[0]!;
   processUploadedQuestionFlow({
     uploadId: primaryUpload.id,
     ocrText: combinedOcrText,
-    filename: files[0].name,
+    filename: files[0]!.name,
     uploaderId,
     institution: metadata.institution,
     course: metadata.course,
@@ -474,11 +472,17 @@ export async function processQuestionUploadMulti(
         uploadId: r.id,
       }));
 
+      const { data: existingQ } = await supabase
+        .from('questions')
+        .select('ai_extracted_data')
+        .eq('id', result.questionId)
+        .single();
+
       await supabase
         .from('questions')
         .update({
           ai_extracted_data: {
-            ...((await supabase.from('questions').select('ai_extracted_data').eq('id', result.questionId).single()).data?.ai_extracted_data || {}),
+            ...(existingQ?.ai_extracted_data || {}),
             page_count: pageCount,
             pages: allPageUrls,
           },
@@ -490,7 +494,7 @@ export async function processQuestionUploadMulti(
         await supabase
           .from('question_uploads')
           .update({ question_id: result.questionId })
-          .eq('id', uploadRecords[i].id);
+          .eq('id', uploadRecords[i]!.id);
       }
 
       console.log(`Multi-page question created: ${result.questionId} with ${pageCount} pages`);

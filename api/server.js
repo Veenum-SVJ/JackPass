@@ -1,7 +1,12 @@
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res) => function __init() {
-  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -940,15 +945,17 @@ async function processQuestionUploadMulti(files, uploaderId, metadata = {}) {
   const ocrResults = [];
   for (let i = 0; i < files.length; i++) {
     try {
-      console.log(`Running OCR on page ${i + 1}/${pageCount} (${files[i].name})...`);
-      const { text, confidence } = await extractTextFromFile(files[i]);
-      ocrResults.push({ text, confidence: confidence.overall, pageIndex: i });
+      const currentFile = files[i];
+      const currentUpload = uploadRecords[i];
+      console.log(`Running OCR on page ${i + 1}/${pageCount} (${currentFile.name})...`);
+      const { text, confidence } = await extractTextFromFile(currentFile);
+      ocrResults.push({ text, confidence: confidence.overall ?? 0.8, pageIndex: i });
       await supabase.from("question_uploads").update({
         upload_status: "processed",
         ocr_text: text,
         ocr_confidence: JSON.stringify({ overall: confidence.overall }),
         processed_at: (/* @__PURE__ */ new Date()).toISOString()
-      }).eq("id", uploadRecords[i].id);
+      }).eq("id", currentUpload.id);
       console.log(`OCR completed for page ${i + 1}: ${text.length} chars`);
     } catch (ocrError) {
       console.error(`OCR failed for page ${i + 1} (non-fatal):`, ocrError);
@@ -961,7 +968,6 @@ async function processQuestionUploadMulti(files, uploaderId, metadata = {}) {
   }
   const combinedOcrText = ocrResults.sort((a, b) => a.pageIndex - b.pageIndex).map((r, idx) => `--- PAGE ${idx + 1} ---
 ${r.text}`).join("\n\n");
-  const avgConfidence = ocrResults.length > 0 ? ocrResults.reduce((sum, r) => sum + r.confidence, 0) / ocrResults.length : 0;
   const primaryUpload = uploadRecords[0];
   processUploadedQuestionFlow({
     uploadId: primaryUpload.id,
@@ -981,9 +987,10 @@ ${r.text}`).join("\n\n");
         fileName: r.file_name,
         uploadId: r.id
       }));
+      const { data: existingQ } = await supabase.from("questions").select("ai_extracted_data").eq("id", result.questionId).single();
       await supabase.from("questions").update({
         ai_extracted_data: {
-          ...(await supabase.from("questions").select("ai_extracted_data").eq("id", result.questionId).single()).data?.ai_extracted_data || {},
+          ...existingQ?.ai_extracted_data || {},
           page_count: pageCount,
           pages: allPageUrls
         }

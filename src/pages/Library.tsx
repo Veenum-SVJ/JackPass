@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import SearchFilters from '@/components/questions/SearchFilters';
 import type { SearchFilterState } from '@/components/questions/SearchFilters';
 import QuestionCard from '@/components/questions/QuestionCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +17,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQuestions } from '@/hooks/useQuestions';
 import { useToast } from '@/hooks/use-toast';
 import { institutions } from '@/lib/institutions';
-import { Link } from 'react-router-dom';
 
 const EMPTY_FILTERS: SearchFilterState = {
   institution: '',
