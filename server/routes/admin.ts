@@ -1,9 +1,37 @@
 import { Router } from 'express';
 import { createServerSupabase } from '../../src/lib/supabase-server';
-import { requireAdmin } from '../middleware';
+import { requireAdmin, requireAuth } from '../middleware';
 
 export const adminRouter = Router();
 export const adminUsersRouter = Router();
+
+/**
+ * GET /api/admin/me
+ * Check if the current authenticated user is an admin.
+ * Uses service-role key to bypass RLS.
+ */
+adminRouter.get('/me', requireAuth, async (_req, res) => {
+  try {
+    const user = res.locals.user as { id: string };
+    const supabase = createServerSupabase();
+
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
+
+    if (error || !data) {
+      res.json({ isAdmin: false });
+      return;
+    }
+
+    res.json({ isAdmin: data.is_admin === true });
+  } catch (error: any) {
+    console.error('Error checking admin status:', error);
+    res.json({ isAdmin: false });
+  }
+});
 
 /**
  * GET /api/admin/stats

@@ -1,4 +1,4 @@
-import React, { type ReactNode } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -30,21 +30,24 @@ export function RequireAuth({ children }: GuardProps) {
 
 /**
  * Redirects non-admin users to the admin login page.
+ * Waits for the async admin check to complete before deciding.
  */
 export function RequireAdmin({ children }: GuardProps) {
   const { user, isAdmin, loading } = useAuth();
   const location = useLocation();
-  const [retryCount, setRetryCount] = React.useState(0);
+  const [waitCount, setWaitCount] = useState(0);
 
-  // After login, checkAdminStatus runs asynchronously. Give it time to complete.
-  React.useEffect(() => {
-    if (!loading && user && !isAdmin && retryCount < 10) {
-      const timer = setTimeout(() => setRetryCount((c) => c + 1), 300);
+  // After login, the admin check runs async via /api/admin/me.
+  // Wait up to 3 seconds for it to resolve.
+  useEffect(() => {
+    if (!loading && user && !isAdmin && waitCount < 20) {
+      const timer = setTimeout(() => setWaitCount((c) => c + 1), 150);
       return () => clearTimeout(timer);
     }
-  }, [loading, user, isAdmin, retryCount]);
+  }, [loading, user, isAdmin, waitCount]);
 
-  if (loading || (!isAdmin && user && retryCount < 10)) {
+  // Still loading or waiting for admin check
+  if (loading || (user && !isAdmin && waitCount < 20)) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <p className="text-muted-foreground">Verifying admin access...</p>

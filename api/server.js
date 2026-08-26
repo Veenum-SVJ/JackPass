@@ -530,6 +530,21 @@ async function requireAdmin(req, res, next) {
 // server/routes/admin.ts
 var adminRouter = Router2();
 var adminUsersRouter = Router2();
+adminRouter.get("/me", requireAuth, async (_req, res) => {
+  try {
+    const user = res.locals.user;
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("user_profiles").select("is_admin").eq("id", user.id).single();
+    if (error || !data) {
+      res.json({ isAdmin: false });
+      return;
+    }
+    res.json({ isAdmin: data.is_admin === true });
+  } catch (error) {
+    console.error("Error checking admin status:", error);
+    res.json({ isAdmin: false });
+  }
+});
 adminRouter.get("/stats", requireAdmin, async (_req, res) => {
   try {
     const supabase = createServerSupabase();

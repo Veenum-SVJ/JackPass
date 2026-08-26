@@ -32,16 +32,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
   const supabase = createBrowserSupabase();
 
-  const checkAdminStatus = async (userId: string) => {
+  const checkAdminStatus = async (_userId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('is_admin')
-        .eq('id', userId)
-        .single();
-
-      if (!error && data) {
-        setIsAdmin(data.is_admin === true);
+      // Use server-side endpoint to bypass RLS
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!token) {
+        setIsAdmin(false);
+        return;
+      }
+      const res = await fetch('/api/admin/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIsAdmin(data.isAdmin === true);
       } else {
         setIsAdmin(false);
       }

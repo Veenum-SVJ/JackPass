@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { createBrowserSupabase } from '@/lib/supabase';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff } from 'lucide-react';
@@ -20,7 +19,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export default function AdminLoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, isAdmin, user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
@@ -32,6 +31,14 @@ export default function AdminLoginPage() {
     defaultValues: { email: '', password: '' },
   });
 
+  // If already logged in as admin, redirect to dashboard
+  useEffect(() => {
+    if (!loading && user && isAdmin) {
+      navigate('/admin', { replace: true });
+    }
+  }, [loading, user, isAdmin, navigate]);
+
+  // Show error toast if redirected from RequireAdmin
   useEffect(() => {
     if (searchParams.get('error') === 'not_admin') {
       toast({
@@ -46,40 +53,18 @@ export default function AdminLoginPage() {
     setIsLoading(true);
     try {
       await signIn(data.email, data.password);
-
-      // signIn triggers onAuthStateChange which calls checkAdminStatus asynchronously.
-      // We can't rely on the stale `isAdmin` closure value, so query the DB directly.
-      const supabase = createBrowserSupabase();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
-        throw new Error('No session after login');
-      }
-
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('is_admin')
-        .eq('id', session.user.id)
-        .single();
-
-      if (profile?.is_admin === true) {
-        toast({
-          title: 'Admin Login Successful!',
-          description: 'Welcome to the admin panel.',
-        });
-        navigate('/admin');
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Access Denied',
-          description: 'Your account does not have admin privileges.',
-        });
-        navigate('/admin/login?error=not_admin');
-      }
+      // Navigate to /admin — RequireAdmin guard will check isAdmin from context
+      // (which is checked server-side via /api/admin/me)
+      toast({
+        title: 'Logged In!',
+        description: 'Checking admin access...',
+      });
+      navigate('/admin');
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: error.message || 'Invalid credentials.',
+        description: error.message || 'Invalid email or password.',
       });
     } finally {
       setIsLoading(false);
@@ -92,7 +77,7 @@ export default function AdminLoginPage() {
       <Card className="relative w-full max-w-sm shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl font-headline">Admin Login</CardTitle>
-          <CardDescription>Sign in with admin credentials.</CardDescription>
+          <CardDescription>Sign in with your JackPass account.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -100,7 +85,7 @@ export default function AdminLoginPage() {
               <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
-                  <FormControl><Input placeholder="admin@example.com" {...field} type="email" /></FormControl>
+                  <FormControl><Input placeholder="your@email.com" {...field} type="email" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
