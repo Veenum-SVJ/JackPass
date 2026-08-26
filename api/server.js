@@ -1,12 +1,7 @@
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __esm = (fn, res, err) => function __init() {
-  if (err) throw err[0];
-  try {
-    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
-  } catch (e) {
-    throw err = [e], e;
-  }
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -832,49 +827,6 @@ async function extractTextFromFile(file) {
 // src/lib/upload.ts
 init_process_uploaded_question();
 import { v4 as uuidv42 } from "uuid";
-async function processQuestionUpload(file, uploaderId, metadata = {}) {
-  const supabase = createServerSupabase();
-  const fileExt = file.name.split(".").pop();
-  const storageFileName = `${uploaderId}/${uuidv42()}.${fileExt}`;
-  const { error: uploadError } = await supabase.storage.from("question-files").upload(storageFileName, file, {
-    contentType: file.type,
-    upsert: false
-  });
-  if (uploadError) {
-    throw new Error(`Failed to upload file: ${uploadError.message}`);
-  }
-  const { data: urlData } = supabase.storage.from("question-files").getPublicUrl(storageFileName);
-  const fileUrl = urlData.publicUrl;
-  const uploadRecord = {
-    id: uuidv42(),
-    uploader_id: uploaderId,
-    file_name: file.name,
-    file_url: fileUrl,
-    file_type: file.type,
-    file_size: file.size,
-    upload_status: "uploading",
-    ocr_text: null,
-    ocr_confidence: null,
-    uploaded_at: (/* @__PURE__ */ new Date()).toISOString(),
-    processed_at: null
-  };
-  const { data: uploadRecordData, error: uploadRecordError } = await supabase.from("question_uploads").insert([uploadRecord]).select().single();
-  if (uploadRecordError) {
-    await supabase.storage.from("question-files").remove([storageFileName]);
-    throw new Error(`Failed to save upload record: ${uploadRecordError.message}`);
-  }
-  try {
-    await processOcrSync(uploadRecordData.id, file, storageFileName, metadata);
-  } catch (ocrError) {
-    console.error("OCR processing failed (non-fatal):", ocrError);
-  }
-  return {
-    upload: uploadRecordData,
-    ocrText: null,
-    ocrConfidence: null,
-    fileUrl
-  };
-}
 async function processLinkImport(fileUrl, uploaderId, _metadata = {}) {
   const supabase = createServerSupabase();
   const { v4: uuidv43 } = await import("uuid");
@@ -941,44 +893,113 @@ async function processLinkImportAsync(uploadId, fileUrl, uploaderId, formMetadat
     }).eq("id", uploadId);
   }
 }
-async function processOcrSync(uploadId, file, _storageFileName, formMetadata) {
+async function processQuestionUploadMulti(files, uploaderId, metadata = {}) {
   const supabase = createServerSupabase();
-  try {
-    await supabase.from("question_uploads").update({ upload_status: "processing" }).eq("id", uploadId);
-    const { text: ocrText, confidence: ocrConfidence } = await extractTextFromFile(file);
-    const { error: updateError } = await supabase.from("question_uploads").update({
-      upload_status: "processed",
-      ocr_text: ocrText,
-      ocr_confidence: JSON.stringify(ocrConfidence),
-      processed_at: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", uploadId);
-    if (updateError) {
-      console.error("Failed to update upload record with OCR results:", updateError);
+  const pageCount = files.length;
+  console.log(`Processing ${pageCount}-page upload for user ${uploaderId}`);
+  const uploadRecords = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const fileExt = file.name.split(".").pop();
+    const storageFileName = `${uploaderId}/${uuidv42()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage.from("question-files").upload(storageFileName, file, {
+      contentType: file.type,
+      upsert: false
+    });
+    if (uploadError) {
+      for (const rec of uploadRecords) {
+        const path = rec.file_url.split("/question-files/")[1];
+        if (path) await supabase.storage.from("question-files").remove([path]);
+      }
+      throw new Error(`Failed to upload page ${i + 1}: ${uploadError.message}`);
     }
-    console.log(`OCR completed for upload ${uploadId}`);
-    const { data: uploadRecord } = await supabase.from("question_uploads").select("uploader_id").eq("id", uploadId).single();
-    if (ocrText.length > 50) {
-      const uploaderId = uploadRecord?.uploader_id || "unknown";
-      processUploadedQuestionFlow({
-        uploadId,
-        ocrText,
-        filename: file.name,
-        uploaderId,
-        institution: formMetadata?.institution,
-        course: formMetadata?.course,
-        courseCode: formMetadata?.courseCode,
-        year: formMetadata?.year,
-        semester: formMetadata?.semester
-      }).catch((err) => console.error("AI extraction failed:", err));
+    const { data: urlData } = supabase.storage.from("question-files").getPublicUrl(storageFileName);
+    const uploadRecord = {
+      id: uuidv42(),
+      uploader_id: uploaderId,
+      file_name: file.name,
+      file_url: urlData.publicUrl,
+      file_type: file.type,
+      file_size: file.size,
+      upload_status: "uploading",
+      ocr_text: null,
+      ocr_confidence: null,
+      uploaded_at: (/* @__PURE__ */ new Date()).toISOString(),
+      processed_at: null
+    };
+    const { data: recordData, error: recordError } = await supabase.from("question_uploads").insert([uploadRecord]).select().single();
+    if (recordError) {
+      throw new Error(`Failed to save upload record for page ${i + 1}: ${recordError.message}`);
     }
-  } catch (error) {
-    console.error("OCR processing failed:", error);
-    await supabase.from("question_uploads").update({
-      upload_status: "failed",
-      ocr_text: `OCR failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-      processed_at: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", uploadId);
+    uploadRecords.push({
+      id: recordData.id,
+      file_url: urlData.publicUrl,
+      file_name: file.name
+    });
   }
+  const ocrResults = [];
+  for (let i = 0; i < files.length; i++) {
+    try {
+      console.log(`Running OCR on page ${i + 1}/${pageCount} (${files[i].name})...`);
+      const { text, confidence } = await extractTextFromFile(files[i]);
+      ocrResults.push({ text, confidence: confidence.overall, pageIndex: i });
+      await supabase.from("question_uploads").update({
+        upload_status: "processed",
+        ocr_text: text,
+        ocr_confidence: JSON.stringify({ overall: confidence.overall }),
+        processed_at: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("id", uploadRecords[i].id);
+      console.log(`OCR completed for page ${i + 1}: ${text.length} chars`);
+    } catch (ocrError) {
+      console.error(`OCR failed for page ${i + 1} (non-fatal):`, ocrError);
+      await supabase.from("question_uploads").update({
+        upload_status: "failed",
+        ocr_text: `OCR failed: ${ocrError instanceof Error ? ocrError.message : "Unknown error"}`,
+        processed_at: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("id", uploadRecords[i].id);
+    }
+  }
+  const combinedOcrText = ocrResults.sort((a, b) => a.pageIndex - b.pageIndex).map((r, idx) => `--- PAGE ${idx + 1} ---
+${r.text}`).join("\n\n");
+  const avgConfidence = ocrResults.length > 0 ? ocrResults.reduce((sum, r) => sum + r.confidence, 0) / ocrResults.length : 0;
+  const primaryUpload = uploadRecords[0];
+  processUploadedQuestionFlow({
+    uploadId: primaryUpload.id,
+    ocrText: combinedOcrText,
+    filename: files[0].name,
+    uploaderId,
+    institution: metadata.institution,
+    course: metadata.course,
+    courseCode: metadata.courseCode,
+    year: metadata.year,
+    semester: metadata.semester
+  }).then(async (result) => {
+    if (result.success && result.questionId && pageCount > 1) {
+      const allPageUrls = uploadRecords.map((r, idx) => ({
+        page: idx + 1,
+        url: r.file_url,
+        fileName: r.file_name,
+        uploadId: r.id
+      }));
+      await supabase.from("questions").update({
+        ai_extracted_data: {
+          ...(await supabase.from("questions").select("ai_extracted_data").eq("id", result.questionId).single()).data?.ai_extracted_data || {},
+          page_count: pageCount,
+          pages: allPageUrls
+        }
+      }).eq("id", result.questionId);
+      for (let i = 1; i < uploadRecords.length; i++) {
+        await supabase.from("question_uploads").update({ question_id: result.questionId }).eq("id", uploadRecords[i].id);
+      }
+      console.log(`Multi-page question created: ${result.questionId} with ${pageCount} pages`);
+    }
+  }).catch((err) => console.error("AI extraction failed for multi-page upload:", err));
+  return {
+    uploadId: primaryUpload.id,
+    fileUrl: primaryUpload.file_url,
+    pageCount,
+    uploadRecords
+  };
 }
 async function getUploadStatus(uploadId) {
   const supabase = createServerSupabase();
@@ -1000,8 +1021,7 @@ var uploadRouter = Router3();
 uploadRouter.post("/", requireAuth, upload.any(), async (req, res) => {
   try {
     const user = res.locals.user;
-    const files = req.files ?? [];
-    const file = files[0];
+    const allFiles = req.files ?? [];
     const fileUrl = typeof req.body.fileUrl === "string" ? req.body.fileUrl : void 0;
     const title = typeof req.body.title === "string" ? req.body.title : void 0;
     const institution = typeof req.body.institution === "string" ? req.body.institution : void 0;
@@ -1010,16 +1030,17 @@ uploadRouter.post("/", requireAuth, upload.any(), async (req, res) => {
     const yearRaw = typeof req.body.year === "string" ? req.body.year.trim() : void 0;
     const semester = req.body.semester;
     const type = req.body.type;
-    if (fileUrl && !file) {
-      const result2 = await processLinkImport(fileUrl, user.id, {
-        title,
-        institution,
-        course: course || void 0,
-        courseCode: courseCode || void 0,
-        year: yearRaw || void 0,
-        semester: semester || void 0,
-        type: type || void 0
-      });
+    const metadata = {
+      title,
+      institution,
+      course: course || void 0,
+      courseCode: courseCode || void 0,
+      year: yearRaw || void 0,
+      semester: semester || void 0,
+      type: type || void 0
+    };
+    if (fileUrl && allFiles.length === 0) {
+      const result2 = await processLinkImport(fileUrl, user.id, metadata);
       res.json({
         success: true,
         uploadId: result2.upload.id,
@@ -1029,36 +1050,32 @@ uploadRouter.post("/", requireAuth, upload.any(), async (req, res) => {
       });
       return;
     }
-    if (!file) {
+    if (allFiles.length === 0) {
       res.status(400).json({ error: "No file or link provided" });
       return;
     }
     const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
     const maxSize = 10 * 1024 * 1024;
-    if (!allowedTypes.includes(file.mimetype)) {
-      res.status(400).json({ error: "Invalid file type. Only PDF and image files are allowed." });
-      return;
+    for (const file of allFiles) {
+      if (!allowedTypes.includes(file.mimetype)) {
+        res.status(400).json({ error: `Invalid file type for ${file.originalname}. Only PDF and image files are allowed.` });
+        return;
+      }
+      if (file.size > maxSize) {
+        res.status(400).json({ error: `File ${file.originalname} exceeds 10 MB limit` });
+        return;
+      }
     }
-    if (file.size > maxSize) {
-      res.status(400).json({ error: "File size exceeds 10 MB limit" });
-      return;
-    }
-    const nodeFile = new File([file.buffer], file.originalname, { type: file.mimetype });
-    const result = await processQuestionUpload(nodeFile, user.id, {
-      title,
-      institution,
-      course: course || void 0,
-      courseCode: courseCode || void 0,
-      year: yearRaw || void 0,
-      semester: semester || void 0,
-      type: type || void 0
-    });
+    const nodeFiles = allFiles.map(
+      (f) => new File([f.buffer], f.originalname, { type: f.mimetype })
+    );
+    const result = await processQuestionUploadMulti(nodeFiles, user.id, metadata);
     res.json({
       success: true,
-      uploadId: result.upload.id,
+      uploadId: result.uploadId,
       fileUrl: result.fileUrl,
-      ocrText: result.ocrText,
-      message: "File uploaded and processed successfully"
+      pageCount: result.pageCount,
+      message: result.pageCount > 1 ? `${result.pageCount}-page question paper uploaded and processed successfully` : "File uploaded and processed successfully"
     });
   } catch (error) {
     console.error("Upload error:", error);

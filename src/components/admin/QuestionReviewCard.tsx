@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Check, X } from 'lucide-react';
+import { Check, X, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -34,6 +34,8 @@ interface QuestionReviewCardProps {
         semester: number;
         type: number;
       };
+      page_count?: number;
+      pages?: Array<{ page: number; url: string; fileName: string }>;
     };
   };
   onApprove: () => void;
@@ -71,6 +73,12 @@ export function QuestionReviewCard({ question, onApprove, onReject }: QuestionRe
               <Badge variant="outline" className="text-xs">
                 {question.year} • {question.semester} Semester
               </Badge>
+              {question.ai_extracted_data?.page_count && question.ai_extracted_data.page_count > 1 && (
+                <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-400/15 dark:text-blue-300">
+                  <FileText className="h-3 w-3 mr-1" />
+                  {question.ai_extracted_data.page_count} Pages
+                </Badge>
+              )}
             </div>
           </div>
           {confidence?.overall && (
@@ -122,6 +130,27 @@ export function QuestionReviewCard({ question, onApprove, onReject }: QuestionRe
           )}
 
           <Separator />
+
+          {/* Multi-page thumbnails */}
+          {question.ai_extracted_data?.pages && question.ai_extracted_data.pages.length > 1 && (
+            <div>
+              <p className="text-muted-foreground text-xs mb-2">Pages ({question.ai_extracted_data.pages.length} total)</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {question.ai_extracted_data.pages.map((page) => (
+                  <a
+                    key={page.page}
+                    href={page.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
+                  >
+                    <FileText className="h-3 w-3" />
+                    Page {page.page}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Uploaded: {format(new Date(question.created_at), 'MMM d, yyyy HH:mm')}</span>

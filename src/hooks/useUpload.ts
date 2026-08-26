@@ -15,6 +15,7 @@ export interface UploadQuestionResult {
   success: boolean;
   uploadId: string;
   fileUrl: string;
+  pageCount?: number;
   message: string;
 }
 

@@ -241,6 +241,15 @@ export function UploadDialog() {
       return;
     }
 
+    // Warn about multi-page uploads
+    const fileCount = data.questionFiles ? data.questionFiles.length : 0;
+    if (fileCount > 1) {
+      toast({
+        title: `Processing ${fileCount} pages...`,
+        description: 'All pages will be grouped as a single question paper with shared metadata.',
+      });
+    }
+
     setIsSubmitting(true);
     try {
       await uploadQuestion.mutateAsync({
@@ -258,7 +267,9 @@ export function UploadDialog() {
         description: (
           <span className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-            Your question paper(s) have been submitted for review.
+            {fileCount > 1
+              ? `${fileCount}-page question paper submitted for review. All pages share the same metadata.`
+              : 'Your question paper has been submitted for review.'}
           </span>
         ),
       });
@@ -367,7 +378,12 @@ export function UploadDialog() {
                       <FormMessage />
                       {selectedFiles.length > 0 && (
                         <div className="space-y-2 pt-2">
-                          <h4 className="text-sm font-medium">Selected Files:</h4>
+                          <h4 className="text-sm font-medium">Selected Files ({selectedFiles.length} page{selectedFiles.length > 1 ? 's' : ''}):</h4>
+                          {selectedFiles.length > 1 && (
+                            <p className="text-xs text-muted-foreground">
+                              All pages will be grouped as a single question paper.
+                            </p>
+                          )}
                           <div className="space-y-2">
                             {selectedFiles.map((file, index) => (
                               <div key={index} className="flex items-center justify-between p-2 text-sm rounded-md bg-muted">

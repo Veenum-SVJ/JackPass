@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { requireAuth } from '../middleware';
-import { processQuestionUpload, processLinkImport, getUploadStatus } from '../../src/lib/upload';
+import { processQuestionUploadMulti, processLinkImport, getUploadStatus } from '../../src/lib/upload';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -21,8 +21,7 @@ uploadRouter.post('/', requireAuth, upload.any(), async (req, res) => {
   try {
     const user = res.locals.user as { id: string };
 
-    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-    const file = files[0];
+    const allFiles = (req.files as Express.Multer.File[] | undefined) ?? [];
     const fileUrl = typeof req.body.fileUrl === 'string' ? req.body.fileUrl : undefined;
 
     const title = typeof req.body.title === 'string' ? req.body.title : undefined;
@@ -33,17 +32,19 @@ uploadRouter.post('/', requireAuth, upload.any(), async (req, res) => {
     const semester = req.body.semester as 'First' | 'Second' | undefined;
     const type = req.body.type as 'Objective' | 'Theory' | 'Mixed' | undefined;
 
+    const metadata = {
+      title,
+      institution,
+      course: course || undefined,
+      courseCode: courseCode || undefined,
+      year: yearRaw || undefined,
+      semester: semester || undefined,
+      type: type || undefined,
+    };
+
     // Handle link import (no file attached)
-    if (fileUrl && !file) {
-      const result = await processLinkImport(fileUrl, user.id, {
-        title,
-        institution,
-        course: course || undefined,
-        courseCode: courseCode || undefined,
-        year: yearRaw || undefined,
-        semester: semester || undefined,
-        type: type || undefined,
-      });
+    if (fileUrl && allFiles.length === 0) {
+      const result = await processLinkImport(fileUrl, user.id, metadata);
 
       res.json({
         success: true,
@@ -55,44 +56,42 @@ uploadRouter.post('/', requireAuth, upload.any(), async (req, res) => {
       return;
     }
 
-    if (!file) {
+    if (allFiles.length === 0) {
       res.status(400).json({ error: 'No file or link provided' });
       return;
     }
 
-    // Validate file type and size
+    // Validate file types and sizes
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
     const maxSize = 10 * 1024 * 1024; // 10 MB
 
-    if (!allowedTypes.includes(file.mimetype)) {
-      res.status(400).json({ error: 'Invalid file type. Only PDF and image files are allowed.' });
-      return;
+    for (const file of allFiles) {
+      if (!allowedTypes.includes(file.mimetype)) {
+        res.status(400).json({ error: `Invalid file type for ${file.originalname}. Only PDF and image files are allowed.` });
+        return;
+      }
+      if (file.size > maxSize) {
+        res.status(400).json({ error: `File ${file.originalname} exceeds 10 MB limit` });
+        return;
+      }
     }
 
-    if (file.size > maxSize) {
-      res.status(400).json({ error: 'File size exceeds 10 MB limit' });
-      return;
-    }
+    // Convert all uploaded buffers into Node Files
+    const nodeFiles = allFiles.map(f =>
+      new File([f.buffer as unknown as ArrayBuffer], f.originalname, { type: f.mimetype })
+    );
 
-    // Convert the uploaded buffer into a Node File so the shared upload lib can process it
-    const nodeFile = new File([file.buffer as unknown as ArrayBuffer], file.originalname, { type: file.mimetype });
-
-    const result = await processQuestionUpload(nodeFile, user.id, {
-      title,
-      institution,
-      course: course || undefined,
-      courseCode: courseCode || undefined,
-      year: yearRaw || undefined,
-      semester: semester || undefined,
-      type: type || undefined,
-    });
+    // Multi-page: process ALL files, combine OCR text, create ONE question
+    const result = await processQuestionUploadMulti(nodeFiles, user.id, metadata);
 
     res.json({
       success: true,
-      uploadId: result.upload.id,
+      uploadId: result.uploadId,
       fileUrl: result.fileUrl,
-      ocrText: result.ocrText,
-      message: 'File uploaded and processed successfully',
+      pageCount: result.pageCount,
+      message: result.pageCount > 1
+        ? `${result.pageCount}-page question paper uploaded and processed successfully`
+        : 'File uploaded and processed successfully',
     });
   } catch (error: any) {
     console.error('Upload error:', error);
