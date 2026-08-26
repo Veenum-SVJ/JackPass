@@ -2,15 +2,15 @@ import { Router } from 'express';
 import { createServerSupabase } from '../../src/lib/supabase-server';
 import { requireAdmin, requireAuth } from '../middleware';
 
-export const adminRouter = Router();
-export const adminUsersRouter = Router();
+// ── Base admin routes (mounted at /api/admin) ────────────────
+export const adminBaseRouter = Router();
 
 /**
  * GET /api/admin/me
  * Check if the current authenticated user is an admin.
  * Uses service-role key to bypass RLS.
  */
-adminRouter.get('/me', requireAuth, async (_req, res) => {
+adminBaseRouter.get('/me', requireAuth, async (_req, res) => {
   try {
     const user = res.locals.user as { id: string };
     const supabase = createServerSupabase();
@@ -37,7 +37,7 @@ adminRouter.get('/me', requireAuth, async (_req, res) => {
  * GET /api/admin/stats
  * Dashboard statistics: total questions, pending, approved, rejected, total users.
  */
-adminRouter.get('/stats', requireAdmin, async (_req, res) => {
+adminBaseRouter.get('/stats', requireAdmin, async (_req, res) => {
   try {
     const supabase = createServerSupabase();
 
@@ -61,6 +61,9 @@ adminRouter.get('/stats', requireAdmin, async (_req, res) => {
     res.status(500).json({ error: 'Failed to fetch stats' });
   }
 });
+
+// ── Question moderation routes (mounted at /api/admin/questions) ──
+export const adminRouter = Router();
 
 /**
  * GET /api/admin/questions
@@ -161,7 +164,8 @@ adminRouter.post('/:id/:action', requireAdmin, async (req, res) => {
   }
 });
 
-// ── User Management ──────────────────────────────────────────
+// ── User Management (mounted at /api/admin/users) ──────────────
+export const adminUsersRouter = Router();
 
 /**
  * GET /api/admin/users
@@ -224,7 +228,6 @@ adminUsersRouter.post('/:id/promote', requireAdmin, async (req, res) => {
   const userId = String(req.params.id);
 
   try {
-    // Prevent self-demotion issues (though promote is fine)
     const supabase = createServerSupabase();
 
     const { data, error } = await supabase

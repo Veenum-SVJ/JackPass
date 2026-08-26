@@ -528,9 +528,8 @@ async function requireAdmin(req, res, next) {
 }
 
 // server/routes/admin.ts
-var adminRouter = Router2();
-var adminUsersRouter = Router2();
-adminRouter.get("/me", requireAuth, async (_req, res) => {
+var adminBaseRouter = Router2();
+adminBaseRouter.get("/me", requireAuth, async (_req, res) => {
   try {
     const user = res.locals.user;
     const supabase = createServerSupabase();
@@ -545,7 +544,7 @@ adminRouter.get("/me", requireAuth, async (_req, res) => {
     res.json({ isAdmin: false });
   }
 });
-adminRouter.get("/stats", requireAdmin, async (_req, res) => {
+adminBaseRouter.get("/stats", requireAdmin, async (_req, res) => {
   try {
     const supabase = createServerSupabase();
     const [questionsResult, usersResult] = await Promise.all([
@@ -565,6 +564,7 @@ adminRouter.get("/stats", requireAdmin, async (_req, res) => {
     res.status(500).json({ error: "Failed to fetch stats" });
   }
 });
+var adminRouter = Router2();
 adminRouter.get("/", requireAdmin, async (req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -628,6 +628,7 @@ adminRouter.post("/:id/:action", requireAdmin, async (req, res) => {
     res.status(500).json({ error: error.message || `Failed to ${action} question` });
   }
 });
+var adminUsersRouter = Router2();
 adminUsersRouter.get("/", requireAdmin, async (req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -1757,6 +1758,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "jackpass-api", time: (/* @__PURE__ */ new Date()).toISOString() });
 });
 app.use("/api/questions", questionsRouter);
+app.use("/api/admin", adminBaseRouter);
 app.use("/api/admin/questions", adminRouter);
 app.use("/api/admin/users", adminUsersRouter);
 app.use("/api/upload", uploadRouter);
