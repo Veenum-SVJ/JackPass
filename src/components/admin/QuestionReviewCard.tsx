@@ -14,7 +14,8 @@ interface QuestionReviewCardProps {
     title: string;
     institution: string;
     course: string;
-    year: number;
+    course_code?: string;
+    year: number | string;
     semester: string;
     type: string;
     status: 'pending' | 'approved' | 'rejected';
@@ -92,7 +93,7 @@ export function QuestionReviewCard({ question, onApprove, onReject }: QuestionRe
           <div className="flex items-center gap-2 text-muted-foreground">
             <span className="font-medium">{question.institution}</span>
             <span>•</span>
-            <span>{question.course}</span>
+            <span>{question.course_code ? `${question.course_code} — ` : ''}{question.course}</span>
           </div>
 
           <div>

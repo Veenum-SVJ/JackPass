@@ -9,7 +9,7 @@ import { processUploadedQuestionFlow } from '../ai/flows/process-uploaded-questi
 export async function processQuestionUpload(
   file: File,
   uploaderId: string,
-  _metadata: {
+  metadata: {
     title?: string;
     institution?: string;
     course?: string;
@@ -74,7 +74,7 @@ export async function processQuestionUpload(
 
   // 3. Process OCR synchronously so it completes within the serverless timeout
   try {
-    await processOcrSync(uploadRecordData.id, file, storageFileName);
+    await processOcrSync(uploadRecordData.id, file, storageFileName, metadata);
   } catch (ocrError) {
     console.error('OCR processing failed (non-fatal):', ocrError);
   }
@@ -96,7 +96,14 @@ export async function triggerAIExtraction(
   uploadId: string,
   ocrText: string,
   filename?: string,
-  uploaderId?: string
+  uploaderId?: string,
+  metadata?: {
+    institution?: string;
+    course?: string;
+    courseCode?: string;
+    year?: string;
+    semester?: 'First' | 'Second';
+  }
 ) {
   try {
     console.log(`Triggering AI extraction for upload ${uploadId}`);
@@ -106,6 +113,7 @@ export async function triggerAIExtraction(
       ocrText,
       filename,
       uploaderId: uploaderId || 'unknown',
+      ...metadata,
     });
 
     return result;
@@ -160,7 +168,7 @@ export async function processLinkImport(
   }
 
   // Process the link import asynchronously
-  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId).catch(err => {
+  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId, _metadata).catch(err => {
     console.error('Link import processing failed:', err);
   });
 
@@ -175,7 +183,14 @@ export async function processLinkImport(
 /**
  * Process a link import asynchronously.
  */
-async function processLinkImportAsync(uploadId: string, fileUrl: string, uploaderId: string) {
+async function processLinkImportAsync(uploadId: string, fileUrl: string, uploaderId: string, formMetadata?: {
+  title?: string;
+  institution?: string;
+  course?: string;
+  courseCode?: string;
+  year?: string;
+  semester?: 'First' | 'Second';
+}) {
   const supabase = createServerSupabase();
 
   try {
@@ -207,6 +222,11 @@ async function processLinkImportAsync(uploadId: string, fileUrl: string, uploade
       ocrText: result.fullContent,
       filename: `link-import-${Date.now()}.pdf`,
       uploaderId,
+      institution: formMetadata?.institution,
+      course: formMetadata?.course,
+      courseCode: formMetadata?.courseCode,
+      year: formMetadata?.year,
+      semester: formMetadata?.semester,
     });
 
     console.log(`Link import ${uploadId} processed successfully`);
@@ -227,7 +247,14 @@ async function processLinkImportAsync(uploadId: string, fileUrl: string, uploade
  * Synchronously process OCR and update the upload record, then trigger AI extraction.
  * This runs within the serverless function lifecycle.
  */
-async function processOcrSync(uploadId: string, file: File, _storageFileName: string) {
+async function processOcrSync(uploadId: string, file: File, _storageFileName: string, formMetadata?: {
+  title?: string;
+  institution?: string;
+  course?: string;
+  courseCode?: string;
+  year?: string;
+  semester?: 'First' | 'Second';
+}) {
   const supabase = createServerSupabase();
 
   try {
@@ -275,6 +302,11 @@ async function processOcrSync(uploadId: string, file: File, _storageFileName: st
         ocrText,
         filename: file.name,
         uploaderId,
+        institution: formMetadata?.institution,
+        course: formMetadata?.course,
+        courseCode: formMetadata?.courseCode,
+        year: formMetadata?.year,
+        semester: formMetadata?.semester,
       }).catch(err => console.error('AI extraction failed:', err));
     }
 

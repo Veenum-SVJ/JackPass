@@ -8,7 +8,8 @@ export interface AdminQuestion {
   title: string;
   institution: string;
   course: string;
-  year: number;
+  course_code?: string;
+  year: number | string;
   semester: string;
   type: string;
   status: QuestionStatus;

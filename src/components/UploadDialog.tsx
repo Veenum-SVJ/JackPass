@@ -54,7 +54,7 @@ const currentYear = new Date().getFullYear();
 const formSchema = z.object({
   institution: z.string().min(1, 'Please select an institution.'),
   course: z.string().min(1, 'Please enter a course name.'),
-  courseCode: z.string().optional(),
+  courseCode: z.string().min(1, 'Course code is required (e.g. CSC 301).'),
   year: z.string().min(1, 'Academic session is required'),
   semester: z.enum(['First', 'Second']),
   questionFiles: fileSchema.optional(),
@@ -223,13 +223,11 @@ export function UploadDialog() {
         description: 'You must be logged in to upload questions. Please log in first.',
       });
       return;
-    }
-
-    if (!data.institution || !data.course || !data.year || !data.semester) {
+    }      if (!data.institution || !data.course || !data.courseCode || !data.year || !data.semester) {
       toast({
         variant: 'destructive',
         title: 'Missing Information',
-        description: 'Please fill in all required fields: Institution, Course, Year, and Semester.',
+        description: 'Please fill in all required fields: Institution, Course Name, Course Code, Academic Session, and Semester.',
       });
       return;
     }

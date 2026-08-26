@@ -167,7 +167,13 @@ var init_process_uploaded_question = __esm({
       uploadId: z2.string().uuid(),
       ocrText: z2.string(),
       filename: z2.string().optional(),
-      uploaderId: z2.string()
+      uploaderId: z2.string(),
+      // User-provided metadata from the upload form (used as primary source)
+      institution: z2.string().optional(),
+      course: z2.string().optional(),
+      courseCode: z2.string().optional(),
+      year: z2.string().optional(),
+      semester: z2.enum(["First", "Second"]).optional()
     });
     ProcessUploadedQuestionOutputSchema = z2.object({
       success: z2.boolean(),
@@ -182,7 +188,7 @@ var init_process_uploaded_question = __esm({
         inputSchema: ProcessUploadedQuestionInputSchema,
         outputSchema: ProcessUploadedQuestionOutputSchema
       },
-      async ({ uploadId, ocrText, filename, uploaderId }) => {
+      async ({ uploadId, ocrText, filename, uploaderId, institution: formInstitution, course: formCourse, courseCode: formCourseCode, year: formYear, semester: formSemester }) => {
         const supabase = createServerSupabase();
         try {
           console.log(`Starting AI metadata extraction for upload ${uploadId}`);
@@ -201,16 +207,20 @@ var init_process_uploaded_question = __esm({
           if (uploadError || !uploadRecord) {
             throw new Error(`Upload record not found: ${uploadError?.message}`);
           }
+          const rawYear = formYear || metadata.year || "";
+          const yearMatch = String(rawYear).match(/(\d{4})/);
+          const yearSession = yearMatch ? rawYear : String((/* @__PURE__ */ new Date()).getFullYear());
+          const yearStart = yearMatch ? yearMatch[1] : String((/* @__PURE__ */ new Date()).getFullYear());
           const questionData = {
             id: uuidv4(),
             title: metadata.title,
-            institution: metadata.institution,
-            course: metadata.course,
+            institution: formInstitution || metadata.institution,
+            course: formCourse || metadata.course,
             faculty: metadata.faculty,
             department: metadata.department,
-            year: metadata.year,
-            semester: metadata.semester,
-            type: metadata.type,
+            year: yearSession,
+            semester: formSemester || metadata.semester,
+            type: metadata.type || "Mixed",
             status: "pending",
             content_preview: metadata.contentPreview,
             full_content: metadata.fullContent,
@@ -224,7 +234,18 @@ var init_process_uploaded_question = __esm({
             created_at: (/* @__PURE__ */ new Date()).toISOString(),
             updated_at: (/* @__PURE__ */ new Date()).toISOString()
           };
-          const { data: question, error: questionError } = await supabase.from("questions").insert([questionData]).select().single();
+          if (formCourseCode) {
+            questionData.course_code = formCourseCode;
+          }
+          ;
+          let { data: question, error: questionError } = await supabase.from("questions").insert([questionData]).select().single();
+          if (questionError && yearSession !== yearStart) {
+            console.log(`Year format '${yearSession}' failed, retrying with '${yearStart}'`);
+            questionData.year = yearStart;
+            const retry = await supabase.from("questions").insert([questionData]).select().single();
+            question = retry.data;
+            questionError = retry.error;
+          }
           if (questionError) {
             throw new Error(`Failed to create question: ${questionError.message}`);
           }
@@ -811,7 +832,7 @@ async function extractTextFromFile(file) {
 // src/lib/upload.ts
 init_process_uploaded_question();
 import { v4 as uuidv42 } from "uuid";
-async function processQuestionUpload(file, uploaderId, _metadata = {}) {
+async function processQuestionUpload(file, uploaderId, metadata = {}) {
   const supabase = createServerSupabase();
   const fileExt = file.name.split(".").pop();
   const storageFileName = `${uploaderId}/${uuidv42()}.${fileExt}`;
@@ -843,7 +864,7 @@ async function processQuestionUpload(file, uploaderId, _metadata = {}) {
     throw new Error(`Failed to save upload record: ${uploadRecordError.message}`);
   }
   try {
-    await processOcrSync(uploadRecordData.id, file, storageFileName);
+    await processOcrSync(uploadRecordData.id, file, storageFileName, metadata);
   } catch (ocrError) {
     console.error("OCR processing failed (non-fatal):", ocrError);
   }
@@ -874,7 +895,7 @@ async function processLinkImport(fileUrl, uploaderId, _metadata = {}) {
   if (insertError) {
     throw new Error(`Failed to save upload record: ${insertError.message}`);
   }
-  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId).catch((err) => {
+  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId, _metadata).catch((err) => {
     console.error("Link import processing failed:", err);
   });
   return {
@@ -884,7 +905,7 @@ async function processLinkImport(fileUrl, uploaderId, _metadata = {}) {
     fileUrl
   };
 }
-async function processLinkImportAsync(uploadId, fileUrl, uploaderId) {
+async function processLinkImportAsync(uploadId, fileUrl, uploaderId, formMetadata) {
   const supabase = createServerSupabase();
   try {
     const { processQuestionDocument: processQuestionDocument2 } = await Promise.resolve().then(() => (init_process_question_document(), process_question_document_exports));
@@ -903,7 +924,12 @@ async function processLinkImportAsync(uploadId, fileUrl, uploaderId) {
       uploadId,
       ocrText: result.fullContent,
       filename: `link-import-${Date.now()}.pdf`,
-      uploaderId
+      uploaderId,
+      institution: formMetadata?.institution,
+      course: formMetadata?.course,
+      courseCode: formMetadata?.courseCode,
+      year: formMetadata?.year,
+      semester: formMetadata?.semester
     });
     console.log(`Link import ${uploadId} processed successfully`);
   } catch (error) {
@@ -915,7 +941,7 @@ async function processLinkImportAsync(uploadId, fileUrl, uploaderId) {
     }).eq("id", uploadId);
   }
 }
-async function processOcrSync(uploadId, file, _storageFileName) {
+async function processOcrSync(uploadId, file, _storageFileName, formMetadata) {
   const supabase = createServerSupabase();
   try {
     await supabase.from("question_uploads").update({ upload_status: "processing" }).eq("id", uploadId);
@@ -937,7 +963,12 @@ async function processOcrSync(uploadId, file, _storageFileName) {
         uploadId,
         ocrText,
         filename: file.name,
-        uploaderId
+        uploaderId,
+        institution: formMetadata?.institution,
+        course: formMetadata?.course,
+        courseCode: formMetadata?.courseCode,
+        year: formMetadata?.year,
+        semester: formMetadata?.semester
       }).catch((err) => console.error("AI extraction failed:", err));
     }
   } catch (error) {
