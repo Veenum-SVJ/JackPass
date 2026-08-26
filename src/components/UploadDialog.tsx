@@ -54,7 +54,7 @@ const currentYear = new Date().getFullYear();
 const formSchema = z.object({
   institution: z.string().min(1, 'Please select an institution.'),
   course: z.string().min(1, 'Please enter a course name.'),
-  courseCode: z.string().optional(),
+  courseCode: z.string().min(1, 'Course code is required (e.g. CSC 301).'),
   year: z.string().min(1, 'Academic session is required'),
   semester: z.enum(['First', 'Second']),
   questionFiles: fileSchema.optional(),
@@ -220,16 +220,14 @@ export function UploadDialog() {
       toast({
         variant: 'destructive',
         title: 'Not Logged In',
-        description: 'You must be logged in to upload questions. Please log in first.',
+        description: 'You must be logged in to upload exam papers. Please log in first.',
       });
       return;
-    }
-
-    if (!data.institution || !data.course || !data.year || !data.semester) {
+    }      if (!data.institution || !data.course || !data.courseCode || !data.year || !data.semester) {
       toast({
         variant: 'destructive',
         title: 'Missing Information',
-        description: 'Please fill in all required fields: Institution, Course, Year, and Semester.',
+        description: 'Please fill in all required fields: Institution, Course Name, Course Code, Academic Session, and Semester.',
       });
       return;
     }
@@ -238,9 +236,18 @@ export function UploadDialog() {
       toast({
         variant: 'destructive',
         title: 'No Content Provided',
-        description: 'Please either upload files or provide a link to the question paper.',
+        description: 'Please either upload files or provide a link to the exam paper.',
       });
       return;
+    }
+
+    // Warn about multi-page uploads
+    const fileCount = data.questionFiles ? data.questionFiles.length : 0;
+    if (fileCount > 1) {
+      toast({
+        title: `Processing ${fileCount} pages...`,
+        description: 'All pages will be grouped as a single exam paper with shared metadata.',
+      });
     }
 
     setIsSubmitting(true);
@@ -260,7 +267,9 @@ export function UploadDialog() {
         description: (
           <span className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-            Your question paper(s) have been submitted for review.
+            {fileCount > 1
+              ? `${fileCount}-page exam paper submitted for review. All pages share the same metadata.`
+              : 'Your exam paper has been submitted for review.'}
           </span>
         ),
       });
@@ -301,7 +310,7 @@ export function UploadDialog() {
       toast({
         variant: "destructive",
         title: "Authentication Required",
-        description: "Please log in to upload a question.",
+        description: "Please log in to upload an exam paper.",
       });
       navigate('/login');
     } else {
@@ -314,14 +323,14 @@ export function UploadDialog() {
       <DialogTrigger asChild>
         <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleTriggerClick}>
           <UploadCloud className="mr-2 h-5 w-5" />
-          Upload Past Question
+          Upload Exam Paper
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Upload Past Question(s)</DialogTitle>
+          <DialogTitle>Upload Exam Paper</DialogTitle>
           <DialogDescription>
-            Contribute to the community by uploading new question papers.
+            Contribute to the community by uploading new exam papers.
           </DialogDescription>
         </DialogHeader>
 
@@ -369,7 +378,12 @@ export function UploadDialog() {
                       <FormMessage />
                       {selectedFiles.length > 0 && (
                         <div className="space-y-2 pt-2">
-                          <h4 className="text-sm font-medium">Selected Files:</h4>
+                          <h4 className="text-sm font-medium">Selected Files ({selectedFiles.length} page{selectedFiles.length > 1 ? 's' : ''}):</h4>
+                          {selectedFiles.length > 1 && (
+                            <p className="text-xs text-muted-foreground">
+                              All pages will be grouped as a single exam paper.
+                            </p>
+                          )}
                           <div className="space-y-2">
                             {selectedFiles.map((file, index) => (
                               <div key={index} className="flex items-center justify-between p-2 text-sm rounded-md bg-muted">

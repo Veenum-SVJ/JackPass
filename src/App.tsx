@@ -15,6 +15,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Billing = lazy(() => import('./pages/Billing'));
+const Library = lazy(() => import('./pages/Library'));
 const Community = lazy(() => import('./pages/Community'));
 const Support = lazy(() => import('./pages/Support'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -48,6 +49,7 @@ export default function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
                 <Route path="/billing" element={<RequireAuth><Billing /></RequireAuth>} />
+                <Route path="/library" element={<Library />} />
                 <Route path="/community" element={<RequireAuth><Community /></RequireAuth>} />
                 <Route path="/support" element={<Support />} />
                 <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
@@ -62,7 +64,7 @@ export default function App() {
                     </RequireAdmin>
                   }
                 >
-                  <Route index element={<Navigate to="/admin/questions" replace />} />
+                  <Route index element={<Navigate to="/admin/dashboard" replace />} />
                   <Route path="dashboard" element={<AdminDashboard />} />
                   <Route path="questions" element={<AdminQuestions />} />
                   <Route path="users" element={<AdminUsers />} />

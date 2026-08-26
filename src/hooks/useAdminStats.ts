@@ -10,7 +10,7 @@ export interface AdminStats {
 }
 
 /**
- * Fetch admin dashboard statistics.
+ * Fetch admin dashboard statistics (exam papers).
  */
 export function useAdminStats() {
   return useQuery({

@@ -8,7 +8,8 @@ export interface AdminQuestion {
   title: string;
   institution: string;
   course: string;
-  year: number;
+  course_code?: string;
+  year: number | string;
   semester: string;
   type: string;
   status: QuestionStatus;
@@ -37,7 +38,7 @@ export interface AdminQuestionsParams {
 }
 
 /**
- * Fetch questions for moderation (admin only).
+ * Fetch exam papers for moderation (admin only).
  */
 export function useAdminQuestions(params: AdminQuestionsParams) {
   return useQuery({
@@ -55,7 +56,7 @@ export function useAdminQuestions(params: AdminQuestionsParams) {
 }
 
 /**
- * Fetch the unique list of institutions from the questions table (admin only).
+ * Fetch the unique list of institutions from the exam papers table (admin only).
  */
 export function useAdminInstitutions() {
   return useQuery({
@@ -67,7 +68,7 @@ export function useAdminInstitutions() {
 }
 
 /**
- * Approve or reject a question (admin only).
+ * Approve or reject an exam paper (admin only).
  */
 export function useModerateQuestion() {
   const queryClient = useQueryClient();
@@ -76,6 +77,27 @@ export function useModerateQuestion() {
     mutationFn: async ({ id, action }: { id: string; action: 'approve' | 'reject' }) => {
       return apiFetch<{ success: boolean }>(`/api/admin/questions/${id}/${action}`, {
         method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+    },
+  });
+}
+
+/**
+ * Bulk approve or reject multiple exam papers (admin only).
+ */
+export function useBulkModerateQuestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ ids, action }: { ids: string[]; action: 'approve' | 'reject' }) => {
+      return apiFetch<{ success: boolean }>(`/api/admin/questions/bulk/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+        headers: { 'Content-Type': 'application/json' },
       });
     },
     onSuccess: () => {

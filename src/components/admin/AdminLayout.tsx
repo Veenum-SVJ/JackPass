@@ -16,19 +16,18 @@ import {
 } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-  LayoutDashboard,
+import { useAuth } from '@/contexts/AuthContext';import { LayoutDashboard,
   FileQuestion,
   Users,
   Shield,
   ArrowLeft,
   LogOut,
 } from 'lucide-react';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 const navItems = [
   { title: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
-  { title: 'Questions', icon: FileQuestion, href: '/admin/questions' },
+  { title: 'Exam Papers', icon: FileQuestion, href: '/admin/questions' },
   { title: 'Users', icon: Users, href: '/admin/users' },
 ];
 
@@ -104,6 +103,7 @@ export default function AdminLayout() {
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <div className="flex-1" />
+          <ThemeToggle />
           <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
             <Link to="/">View Site</Link>
           </Button>

@@ -1,15 +1,82 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Search, Loader2, FileQuestion, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Search, Loader2, FileText, Clock, CheckCircle, XCircle, CheckCheck, XSquare, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { QuestionReviewCard } from '@/components/admin/QuestionReviewCard';
 import {
   useAdminQuestions,
   useAdminInstitutions,
   useModerateQuestion,
+  useBulkModerateQuestion,
   type QuestionStatus,
 } from '@/hooks/useAdminQuestions';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
+
+const PAGE_SIZE = 12;
+
+type AdminQuestion = {
+  id: string;
+  title: string;
+  institution: string;
+  course: string;
+  course_code?: string;
+  year: number | string;
+  semester: string;
+  type: string;
+  status: string;
+  created_at: string;
+  ai_extracted_data?: {
+    confidence?: { overall: number };
+  };
+};
+
+function escapeCsv(value: string): string {
+  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function exportToCsv(papers: AdminQuestion[], filename: string) {
+  const headers = [
+    'ID', 'Title', 'Institution', 'Course', 'Course Code', 'Year', 'Semester',
+    'Type', 'Status', 'AI Confidence', 'Created At',
+  ];
+
+  const rows = papers.map(p => [
+    p.id,
+    p.title,
+    p.institution,
+    p.course,
+    p.course_code ?? '',
+    String(p.year),
+    p.semester,
+    p.type,
+    p.status,
+    p.ai_extracted_data?.confidence?.overall != null
+      ? `${Math.round(p.ai_extracted_data.confidence.overall * 100)}%`
+      : '',
+    new Date(p.created_at).toISOString(),
+  ]);
+
+  const csv = [
+    headers.map(escapeCsv).join(','),
+    ...rows.map(row => row.map(cell => escapeCsv(String(cell))).join(',')),
+  ].join('\n');
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 export default function AdminQuestionsPage() {
   const { toast } = useToast();
@@ -17,6 +84,8 @@ export default function AdminQuestionsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | QuestionStatus>('pending');
   const [institutionFilter, setInstitutionFilter] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
 
   const { data: questions = [], isLoading } = useAdminQuestions({
     search: debouncedSearch,
@@ -25,6 +94,7 @@ export default function AdminQuestionsPage() {
   });
   const { data: institutions = [] } = useAdminInstitutions();
   const moderateQuestion = useModerateQuestion();
+  const bulkModerate = useBulkModerateQuestion();
 
   // Debounce the search input
   useEffect(() => {
@@ -32,26 +102,166 @@ export default function AdminQuestionsPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Clear selection and reset page when filters change
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setPage(1);
+  }, [debouncedSearch, statusFilter, institutionFilter]);
+
+  // Client-side pagination
+  const totalPages = Math.max(1, Math.ceil(questions.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginatedQuestions = useMemo(() => {
+    const start = (safePage - 1) * PAGE_SIZE;
+    return questions.slice(start, start + PAGE_SIZE);
+  }, [questions, safePage]);
+
   const handleStatusChange = async (id: string, action: 'approve' | 'reject') => {
     try {
       await moderateQuestion.mutateAsync({ id, action });
       toast({
-        title: action === 'approve' ? 'Question Approved' : 'Question Rejected',
-        description: `The question has been ${action}d successfully.`,
+        title: action === 'approve' ? 'Exam Paper Approved' : 'Exam Paper Rejected',
+        description: `The exam paper has been ${action}d successfully.`,
       });
     } catch (error: any) {
-      console.error(`Failed to ${action} question:`, error);
+      console.error(`Failed to ${action} exam paper:`, error);
       toast({
         variant: 'destructive',
         title: 'Action Failed',
-        description: error.message || `Could not ${action} the question.`,
+        description: error.message || `Could not ${action} the exam paper.`,
       });
     }
   };
 
+  const handleBulkAction = async (action: 'approve' | 'reject') => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    try {
+      await bulkModerate.mutateAsync({ ids, action });
+      toast({
+        title: action === 'approve' ? 'Exam Papers Approved' : 'Exam Papers Rejected',
+        description: `${ids.length} exam paper${ids.length > 1 ? 's' : ''} ${action === 'approve' ? 'approved' : 'rejected'} successfully.`,
+      });
+      setSelectedIds(new Set());
+    } catch (error: any) {
+      console.error(`Failed to bulk ${action} exam papers:`, error);
+      toast({
+        variant: 'destructive',
+        title: 'Bulk Action Failed',
+        description: error.message || `Could not ${action} the selected exam papers.`,
+      });
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === paginatedQuestions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(paginatedQuestions.map(q => q.id)));
+    }
+  };
+
+  const handleExportCsv = (target: 'all' | 'selected') => {
+    const toExport = target === 'selected'
+      ? questions.filter(q => selectedIds.has(q.id))
+      : questions;
+
+    if (toExport.length === 0) {
+      toast({ variant: 'destructive', title: 'Nothing to export', description: 'No exam papers to export.' });
+      return;
+    }
+
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const label = target === 'selected' ? 'selected' : statusFilter === 'all' ? 'all' : statusFilter;
+    exportToCsv(toExport, `exam-papers-${label}-${timestamp}.csv`);
+
+    toast({
+      title: 'Export Complete',
+      description: `${toExport.length} exam paper${toExport.length > 1 ? 's' : ''} exported as CSV.`,
+    });
+  };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const mod = isMac ? 'metaKey' : 'ctrlKey';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept when typing in inputs/selects
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+      // Ctrl/Cmd+A → Select all on page
+      if (e[mod] && e.key === 'a' && !e.shiftKey) {
+        e.preventDefault();
+        toggleSelectAll();
+        return;
+      }
+
+      // Escape → Clear selection
+      if (e.key === 'Escape' && selectedIds.size > 0) {
+        e.preventDefault();
+        setSelectedIds(new Set());
+        return;
+      }
+
+      // Ctrl/Cmd+Shift+A → Approve selected
+      if (e[mod] && e.shiftKey && e.key.toUpperCase() === 'A' && selectedIds.size > 0) {
+        e.preventDefault();
+        handleBulkAction('approve');
+        return;
+      }
+
+      // Ctrl/Cmd+Shift+R → Reject selected
+      if (e[mod] && e.shiftKey && e.key.toUpperCase() === 'R' && selectedIds.size > 0) {
+        e.preventDefault();
+        handleBulkAction('reject');
+        return;
+      }
+
+      // Ctrl/Cmd+E → Export all
+      if (e[mod] && !e.shiftKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        handleExportCsv('all');
+        return;
+      }
+
+      // Ctrl/Cmd+Shift+E → Export selected
+      if (e[mod] && e.shiftKey && e.key.toLowerCase() === 'e' && selectedIds.size > 0) {
+        e.preventDefault();
+        handleExportCsv('selected');
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds, paginatedQuestions, toggleSelectAll, handleBulkAction, handleExportCsv]);
+
+  const allSelected = paginatedQuestions.length > 0 && selectedIds.size === paginatedQuestions.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < paginatedQuestions.length;
+
   const pendingCount = questions.filter(q => q.status === 'pending').length;
   const approvedCount = questions.filter(q => q.status === 'approved').length;
   const rejectedCount = questions.filter(q => q.status === 'rejected').length;
+
+  // Generate page number buttons with ellipsis
+  const pageNumbers = useMemo(() => {
+    const pages: (number | '...')[] = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (safePage > 3) pages.push('...');
+      for (let i = Math.max(2, safePage - 1); i <= Math.min(totalPages - 1, safePage + 1); i++) {
+        pages.push(i);
+      }
+      if (safePage < totalPages - 2) pages.push('...');
+      pages.push(totalPages);
+    }
+    return pages;
+  }, [totalPages, safePage]);
 
   return (
     <div className="p-6 space-y-6">
@@ -67,10 +277,10 @@ export default function AdminQuestionsPage() {
                 Moderation
               </span>
               <h1 className="text-3xl md:text-4xl font-bold font-headline tracking-tight">
-                Question Moderation
+                Exam Paper Moderation
               </h1>
               <p className="text-muted-foreground mt-2 max-w-xl">
-                Review and approve questions submitted by students.
+                Review and approve exam papers submitted by students.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -99,7 +309,7 @@ export default function AdminQuestionsPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search questions..."
+                placeholder="Search exam papers..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
@@ -129,7 +339,98 @@ export default function AdminQuestionsPage() {
         </CardContent>
       </Card>
 
-      {/* Questions Grid */}
+      {/* Bulk Action Bar */}
+      {!isLoading && paginatedQuestions.length > 0 && (
+        <div className="flex items-center gap-4 p-4 bg-card rounded-lg border">
+          <div className="flex items-center gap-3">
+            <Checkbox
+              checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+              onCheckedChange={toggleSelectAll}
+            />
+            <span className="text-sm text-muted-foreground">
+              {selectedIds.size === 0
+                ? `Select all ${paginatedQuestions.length} on this page`
+                : `${selectedIds.size} of ${paginatedQuestions.length} selected on this page`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleExportCsv('selected')}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export Selected ({selectedIds.size})
+              </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleExportCsv('all')}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export All ({questions.length})
+            </Button>
+            {selectedIds.size > 0 && (
+              <>
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => handleBulkAction('approve')}
+                  disabled={bulkModerate.isPending}
+                >
+                  {bulkModerate.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCheck className="h-4 w-4 mr-2" />
+                  )}
+                  Approve ({selectedIds.size})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleBulkAction('reject')}
+                  disabled={bulkModerate.isPending}
+                >
+                  {bulkModerate.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <XSquare className="h-4 w-4 mr-2" />
+                  )}
+                  Reject ({selectedIds.size})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Keyboard shortcut hints */}
+      {!isLoading && paginatedQuestions.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+A</kbd> Select all</span>
+          <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Esc</kbd> Clear selection</span>
+          {selectedIds.size > 0 && (
+            <>
+              <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+Shift+A</kbd> Approve</span>
+              <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+Shift+R</kbd> Reject</span>
+            </>
+          )}
+          <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+E</kbd> Export all</span>
+          {selectedIds.size > 0 && (
+            <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+Shift+E</kbd> Export selected</span>
+          )}
+        </div>
+      )}
+
+      {/* Exam Papers Grid */}
       {isLoading ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
@@ -150,34 +451,92 @@ export default function AdminQuestionsPage() {
           <div aria-hidden className="absolute inset-0 bg-adire text-primary/5" />
           <CardContent className="relative py-12 text-center">
             <div className="bg-primary/10 text-primary p-3 rounded-full mx-auto mb-4 w-fit">
-              <FileQuestion className="h-6 w-6" />
+              <FileText className="h-6 w-6" />
             </div>
-            <h3 className="text-xl font-semibold font-headline mb-2">No Questions Found</h3>
+            <h3 className="text-xl font-semibold font-headline mb-2">No Exam Papers Found</h3>
             <p className="text-muted-foreground max-w-md mx-auto">
-              {statusFilter === 'pending' 
-                ? 'All caught up! No pending questions to review.'
-                : 'No questions match your current filters. Try adjusting your search criteria.'}
+              {statusFilter === 'pending'
+                ? 'All caught up! No pending exam papers to review.'
+                : 'No exam papers match your current filters. Try adjusting your search criteria.'}
             </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {questions.map(question => (
-            <QuestionReviewCard
-              key={question.id}
-              question={question}
-              onApprove={() => handleStatusChange(question.id, 'approve')}
-              onReject={() => handleStatusChange(question.id, 'reject')}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {paginatedQuestions.map(question => (
+              <QuestionReviewCard
+                key={question.id}
+                question={question}
+                onApprove={() => handleStatusChange(question.id, 'approve')}
+                onReject={() => handleStatusChange(question.id, 'reject')}
+                selected={selectedIds.has(question.id)}
+                onSelect={(selected) => {
+                  if (selected) {
+                    setSelectedIds(prev => new Set(prev).add(question.id));
+                  } else {
+                    setSelectedIds(prev => {
+                      const next = new Set(prev);
+                      next.delete(question.id);
+                      return next;
+                    });
+                  }
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, questions.length)} of {questions.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {pageNumbers.map((p, i) =>
+                  p === '...' ? (
+                    <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground text-sm">…</span>
+                  ) : (
+                    <Button
+                      key={p}
+                      variant={p === safePage ? 'default' : 'outline'}
+                      size="icon"
+                      className={cn('h-8 w-8 text-sm', p === safePage && 'pointer-events-none')}
+                      onClick={() => setPage(p)}
+                    >
+                      {p}
+                    </Button>
+                  )
+                )}
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {moderateQuestion.isPending && (
+      {(moderateQuestion.isPending || bulkModerate.isPending) && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50">
           <Badge className="text-sm gap-2 shadow-lg">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Updating question...
+            {bulkModerate.isPending ? `Updating ${selectedIds.size} exam papers...` : 'Updating exam paper...'}
           </Badge>
         </div>
       )}
