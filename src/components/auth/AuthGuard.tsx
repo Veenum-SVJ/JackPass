@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -34,11 +34,20 @@ export function RequireAuth({ children }: GuardProps) {
 export function RequireAdmin({ children }: GuardProps) {
   const { user, isAdmin, loading } = useAuth();
   const location = useLocation();
+  const [retryCount, setRetryCount] = React.useState(0);
 
-  if (loading) {
+  // After login, checkAdminStatus runs asynchronously. Give it time to complete.
+  React.useEffect(() => {
+    if (!loading && user && !isAdmin && retryCount < 10) {
+      const timer = setTimeout(() => setRetryCount((c) => c + 1), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, user, isAdmin, retryCount]);
+
+  if (loading || (!isAdmin && user && retryCount < 10)) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <p>Loading...</p>
+        <p className="text-muted-foreground">Verifying admin access...</p>
       </div>
     );
   }

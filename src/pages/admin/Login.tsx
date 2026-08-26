@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
+import { createBrowserSupabase } from '@/lib/supabase';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff } from 'lucide-react';
@@ -19,7 +20,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export default function AdminLoginPage() {
-  const { signIn, isAdmin } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
@@ -45,22 +46,35 @@ export default function AdminLoginPage() {
     setIsLoading(true);
     try {
       await signIn(data.email, data.password);
-      setTimeout(() => {
-        if (isAdmin) {
-          toast({
-            title: 'Admin Login Successful!',
-            description: 'Welcome to the admin panel.',
-          });
-          navigate('/admin');
-        } else {
-          toast({
-            variant: 'destructive',
-            title: 'Access Denied',
-            description: 'Your account does not have admin privileges.',
-          });
-          navigate('/admin/login?error=not_admin');
-        }
-      }, 500);
+
+      // signIn triggers onAuthStateChange which calls checkAdminStatus asynchronously.
+      // We can't rely on the stale `isAdmin` closure value, so query the DB directly.
+      const supabase = createBrowserSupabase();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        throw new Error('No session after login');
+      }
+
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profile?.is_admin === true) {
+        toast({
+          title: 'Admin Login Successful!',
+          description: 'Welcome to the admin panel.',
+        });
+        navigate('/admin');
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Access Denied',
+          description: 'Your account does not have admin privileges.',
+        });
+        navigate('/admin/login?error=not_admin');
+      }
     } catch (error: any) {
       toast({
         variant: 'destructive',
