@@ -9,6 +9,12 @@ const ProcessUploadedQuestionInputSchema = z.object({
   ocrText: z.string(),
   filename: z.string().optional(),
   uploaderId: z.string(),
+  // User-provided metadata from the upload form (used as primary source)
+  institution: z.string().optional(),
+  course: z.string().optional(),
+  courseCode: z.string().optional(),
+  year: z.string().optional(),
+  semester: z.enum(['First', 'Second']).optional(),
 });
 
 export type ProcessUploadedQuestionInput = z.infer<typeof ProcessUploadedQuestionInputSchema>;
@@ -29,7 +35,7 @@ export const processUploadedQuestionFlow = ai.defineFlow(
     inputSchema: ProcessUploadedQuestionInputSchema,
     outputSchema: ProcessUploadedQuestionOutputSchema,
   },
-  async ({ uploadId, ocrText, filename, uploaderId }) => {
+  async ({ uploadId, ocrText, filename, uploaderId, institution: formInstitution, course: formCourse, courseCode: formCourseCode, year: formYear, semester: formSemester }) => {
     const supabase = createServerSupabase();
 
     try {
@@ -60,17 +66,28 @@ export const processUploadedQuestionFlow = ai.defineFlow(
         throw new Error(`Upload record not found: ${uploadError?.message}`);
       }
 
-      // Step 3: Create the question record in 'pending' status
-      const questionData = {
+      // Step 3: Prefer user-provided metadata over AI-extracted values
+      // (user filled the form manually or confirmed the scan results)
+      // Parse year for DB: column may be integer or text depending on migration state
+      // Use the full session format (e.g. '2025/2026') if migration was applied,
+      // otherwise fall back to the starting year integer (e.g. '2025')
+      const rawYear = formYear || metadata.year || '';
+      const yearMatch = String(rawYear).match(/(\d{4})/);
+      // Full session format (e.g. '2025/2026') — works when migration applied (year is text)
+      const yearSession = yearMatch ? rawYear : String(new Date().getFullYear());
+      // Starting year only (e.g. '2025') — works when year column is still integer
+      const yearStart = yearMatch ? yearMatch[1] : String(new Date().getFullYear());
+
+      const questionData: Record<string, unknown> = {
         id: uuidv4(),
         title: metadata.title,
-        institution: metadata.institution,
-        course: metadata.course,
+        institution: formInstitution || metadata.institution,
+        course: formCourse || metadata.course,
         faculty: metadata.faculty,
         department: metadata.department,
-        year: metadata.year,
-        semester: metadata.semester,
-        type: metadata.type,
+        year: yearSession,
+        semester: formSemester || metadata.semester,
+        type: metadata.type || 'Mixed',
         status: 'pending' as const,
         content_preview: metadata.contentPreview,
         full_content: metadata.fullContent,
@@ -85,11 +102,29 @@ export const processUploadedQuestionFlow = ai.defineFlow(
         updated_at: new Date().toISOString(),
       };
 
-      const { data: question, error: questionError } = await supabase
+      // Include course_code only if provided (column may not exist yet)
+      if (formCourseCode) {
+        questionData.course_code = formCourseCode;
+      };
+
+      let { data: question, error: questionError } = await supabase
         .from('questions')
         .insert([questionData])
         .select()
         .single();
+
+      // If insert fails (likely year column is still integer), retry with starting year only
+      if (questionError && yearSession !== yearStart) {
+        console.log(`Year format '${yearSession}' failed, retrying with '${yearStart}'`);
+        questionData.year = yearStart;
+        const retry = await supabase
+          .from('questions')
+          .insert([questionData])
+          .select()
+          .single();
+        question = retry.data;
+        questionError = retry.error;
+      }
 
       if (questionError) {
         throw new Error(`Failed to create question: ${questionError.message}`);

@@ -9,7 +9,7 @@ import { processUploadedQuestionFlow } from '../ai/flows/process-uploaded-questi
 export async function processQuestionUpload(
   file: File,
   uploaderId: string,
-  _metadata: {
+  metadata: {
     title?: string;
     institution?: string;
     course?: string;
@@ -74,7 +74,7 @@ export async function processQuestionUpload(
 
   // 3. Process OCR synchronously so it completes within the serverless timeout
   try {
-    await processOcrSync(uploadRecordData.id, file, storageFileName);
+    await processOcrSync(uploadRecordData.id, file, storageFileName, metadata);
   } catch (ocrError) {
     console.error('OCR processing failed (non-fatal):', ocrError);
   }
@@ -96,7 +96,14 @@ export async function triggerAIExtraction(
   uploadId: string,
   ocrText: string,
   filename?: string,
-  uploaderId?: string
+  uploaderId?: string,
+  metadata?: {
+    institution?: string;
+    course?: string;
+    courseCode?: string;
+    year?: string;
+    semester?: 'First' | 'Second';
+  }
 ) {
   try {
     console.log(`Triggering AI extraction for upload ${uploadId}`);
@@ -106,6 +113,7 @@ export async function triggerAIExtraction(
       ocrText,
       filename,
       uploaderId: uploaderId || 'unknown',
+      ...metadata,
     });
 
     return result;
@@ -160,7 +168,7 @@ export async function processLinkImport(
   }
 
   // Process the link import asynchronously
-  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId).catch(err => {
+  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId, _metadata).catch(err => {
     console.error('Link import processing failed:', err);
   });
 
@@ -175,7 +183,14 @@ export async function processLinkImport(
 /**
  * Process a link import asynchronously.
  */
-async function processLinkImportAsync(uploadId: string, fileUrl: string, uploaderId: string) {
+async function processLinkImportAsync(uploadId: string, fileUrl: string, uploaderId: string, formMetadata?: {
+  title?: string;
+  institution?: string;
+  course?: string;
+  courseCode?: string;
+  year?: string;
+  semester?: 'First' | 'Second';
+}) {
   const supabase = createServerSupabase();
 
   try {
@@ -207,6 +222,11 @@ async function processLinkImportAsync(uploadId: string, fileUrl: string, uploade
       ocrText: result.fullContent,
       filename: `link-import-${Date.now()}.pdf`,
       uploaderId,
+      institution: formMetadata?.institution,
+      course: formMetadata?.course,
+      courseCode: formMetadata?.courseCode,
+      year: formMetadata?.year,
+      semester: formMetadata?.semester,
     });
 
     console.log(`Link import ${uploadId} processed successfully`);
@@ -227,7 +247,14 @@ async function processLinkImportAsync(uploadId: string, fileUrl: string, uploade
  * Synchronously process OCR and update the upload record, then trigger AI extraction.
  * This runs within the serverless function lifecycle.
  */
-async function processOcrSync(uploadId: string, file: File, _storageFileName: string) {
+async function processOcrSync(uploadId: string, file: File, _storageFileName: string, formMetadata?: {
+  title?: string;
+  institution?: string;
+  course?: string;
+  courseCode?: string;
+  year?: string;
+  semester?: 'First' | 'Second';
+}) {
   const supabase = createServerSupabase();
 
   try {
@@ -275,6 +302,11 @@ async function processOcrSync(uploadId: string, file: File, _storageFileName: st
         ocrText,
         filename: file.name,
         uploaderId,
+        institution: formMetadata?.institution,
+        course: formMetadata?.course,
+        courseCode: formMetadata?.courseCode,
+        year: formMetadata?.year,
+        semester: formMetadata?.semester,
       }).catch(err => console.error('AI extraction failed:', err));
     }
 
@@ -291,6 +323,190 @@ async function processOcrSync(uploadId: string, file: File, _storageFileName: st
       })
       .eq('id', uploadId);
   }
+}
+
+/**
+ * Process multiple files as a single multi-page question upload.
+ * All files share the same metadata (institution, course, etc.).
+ * OCR runs on each page, text is combined, and ONE question is created.
+ */
+export async function processQuestionUploadMulti(
+  files: File[],
+  uploaderId: string,
+  metadata: {
+    title?: string;
+    institution?: string;
+    course?: string;
+    courseCode?: string;
+    year?: string;
+    semester?: 'First' | 'Second';
+    type?: 'Objective' | 'Theory' | 'Mixed';
+  } = {}
+) {
+  const supabase = createServerSupabase();
+  const pageCount = files.length;
+
+  console.log(`Processing ${pageCount}-page upload for user ${uploaderId}`);
+
+  // 1. Upload ALL files to storage and create upload records
+  const uploadRecords: Array<{ id: string; file_url: string; file_name: string }> = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]!;
+    const fileExt = file.name.split('.').pop();
+    const storageFileName = `${uploaderId}/${uuidv4()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('question-files')
+      .upload(storageFileName, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      // Clean up previously uploaded files on failure
+      for (const rec of uploadRecords) {
+        const path = rec.file_url.split('/question-files/')[1];
+        if (path) await supabase.storage.from('question-files').remove([path]);
+      }
+      throw new Error(`Failed to upload page ${i + 1}: ${uploadError.message}`);
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('question-files')
+      .getPublicUrl(storageFileName);
+
+    const uploadRecord = {
+      id: uuidv4(),
+      uploader_id: uploaderId,
+      file_name: file.name,
+      file_url: urlData.publicUrl,
+      file_type: file.type,
+      file_size: file.size,
+      upload_status: 'uploading' as const,
+      ocr_text: null,
+      ocr_confidence: null,
+      uploaded_at: new Date().toISOString(),
+      processed_at: null,
+    };
+
+    const { data: recordData, error: recordError } = await supabase
+      .from('question_uploads')
+      .insert([uploadRecord])
+      .select()
+      .single();
+
+    if (recordError) {
+      throw new Error(`Failed to save upload record for page ${i + 1}: ${recordError.message}`);
+    }
+
+    uploadRecords.push({
+      id: recordData.id,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+    });
+  }
+
+  // 2. Run OCR on ALL files and combine text
+  const ocrResults: Array<{ text: string; confidence: number; pageIndex: number }> = [];
+
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const currentFile = files[i]!;
+      const currentUpload = uploadRecords[i]!;
+      console.log(`Running OCR on page ${i + 1}/${pageCount} (${currentFile.name})...`);
+      const { text, confidence } = await extractTextFromFile(currentFile);
+      ocrResults.push({ text, confidence: confidence.overall ?? 0.8, pageIndex: i });
+
+      // Update upload record with OCR results
+      await supabase
+        .from('question_uploads')
+        .update({
+          upload_status: 'processed' as const,
+          ocr_text: text,
+          ocr_confidence: JSON.stringify({ overall: confidence.overall }),
+          processed_at: new Date().toISOString(),
+        })
+        .eq('id', currentUpload.id);
+
+      console.log(`OCR completed for page ${i + 1}: ${text.length} chars`);
+    } catch (ocrError) {
+      console.error(`OCR failed for page ${i + 1} (non-fatal):`, ocrError);
+      await supabase
+        .from('question_uploads')
+        .update({
+          upload_status: 'failed' as const,
+          ocr_text: `OCR failed: ${ocrError instanceof Error ? ocrError.message : 'Unknown error'}`,
+          processed_at: new Date().toISOString(),
+        })
+        .eq('id', uploadRecords[i]!.id);
+    }
+  }
+
+  // 3. Combine OCR text from all pages (separated by page markers)
+  const combinedOcrText = ocrResults
+    .sort((a, b) => a.pageIndex - b.pageIndex)
+    .map((r, idx) => `--- PAGE ${idx + 1} ---\n${r.text}`)
+    .join('\n\n');
+
+  // 4. Create ONE question with all pages combined
+  // Fire-and-forget AI extraction (creates the question record)
+  const primaryUpload = uploadRecords[0]!;
+  processUploadedQuestionFlow({
+    uploadId: primaryUpload.id,
+    ocrText: combinedOcrText,
+    filename: files[0]!.name,
+    uploaderId,
+    institution: metadata.institution,
+    course: metadata.course,
+    courseCode: metadata.courseCode,
+    year: metadata.year,
+    semester: metadata.semester,
+  }).then(async (result) => {
+    // If successful and multi-page, update the question with page URLs
+    if (result.success && result.questionId && pageCount > 1) {
+      const allPageUrls = uploadRecords.map((r, idx) => ({
+        page: idx + 1,
+        url: r.file_url,
+        fileName: r.file_name,
+        uploadId: r.id,
+      }));
+
+      const { data: existingQ } = await supabase
+        .from('questions')
+        .select('ai_extracted_data')
+        .eq('id', result.questionId)
+        .single();
+
+      await supabase
+        .from('questions')
+        .update({
+          ai_extracted_data: {
+            ...(existingQ?.ai_extracted_data || {}),
+            page_count: pageCount,
+            pages: allPageUrls,
+          },
+        })
+        .eq('id', result.questionId);
+
+      // Link all other upload records to the same question
+      for (let i = 1; i < uploadRecords.length; i++) {
+        await supabase
+          .from('question_uploads')
+          .update({ question_id: result.questionId })
+          .eq('id', uploadRecords[i]!.id);
+      }
+
+      console.log(`Multi-page question created: ${result.questionId} with ${pageCount} pages`);
+    }
+  }).catch(err => console.error('AI extraction failed for multi-page upload:', err));
+
+  return {
+    uploadId: primaryUpload.id,
+    fileUrl: primaryUpload.file_url,
+    pageCount,
+    uploadRecords,
+  };
 }
 
 /**

@@ -117,9 +117,192 @@ adminRouter.get('/', requireAdmin, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/questions/bulk/:action
+ * Bulk approve or reject multiple exam papers.
+ */
+adminRouter.post('/bulk/:action', requireAdmin, async (req, res) => {
+  const action = String(req.params.action);
+  const user = res.locals.user as { id: string };
+
+  try {
+    if (!['approve', 'reject'].includes(action)) {
+      res.status(400).json({ error: 'Invalid action. Use "approve" or "reject"' });
+      return;
+    }
+
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: 'ids must be a non-empty array' });
+      return;
+    }
+
+    const supabase = createServerSupabase();
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+
+    const { data, error } = await supabase
+      .from('questions')
+      .update({
+        status: newStatus,
+        approved_at: new Date().toISOString(),
+        approved_by: user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .in('id', ids)
+      .select();
+
+    if (error) throw error;
+
+    res.json({
+      success: true,
+      count: data?.length ?? 0,
+      message: `${data?.length ?? 0} exam paper(s) ${action}d successfully`,
+    });
+  } catch (error: any) {
+    console.error(`Error bulk ${action}ing questions:`, error);
+    res.status(500).json({ error: error.message || `Failed to bulk ${action} questions` });
+  }
+});
+
+/**
+ * PUT /api/admin/questions/:id
+ * Update exam paper content (title, full_content, content_preview, answer, explanation, etc.).
+ */
+adminRouter.put('/:id', requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+
+  try {
+    const supabase = createServerSupabase();
+
+    // Only allow updating specific fields
+    const allowedFields = ['title', 'institution', 'course', 'course_code', 'year', 'semester', 'type', 'content_preview', 'full_content', 'answer', 'explanation'];
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
+    for (const field of allowedFields) {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(updates).length <= 1) {
+      res.status(400).json({ error: 'No valid fields to update' });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('questions')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) {
+      res.status(404).json({ error: 'Exam paper not found' });
+      return;
+    }
+
+    res.json({ success: true, question: data, message: 'Exam paper updated successfully' });
+  } catch (error: any) {
+    console.error('Error updating exam paper:', error);
+    res.status(500).json({ error: error.message || 'Failed to update exam paper' });
+  }
+});
+
+/**
  * POST /api/admin/questions/:id/:action
  * Approve or reject a question.
  */
+adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+
+  try {
+    const supabase = createServerSupabase();
+
+    // Fetch the question to get file_url
+    const { data: question, error: fetchError } = await supabase
+      .from('questions')
+      .select('id, file_url, file_name')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !question) {
+      res.status(404).json({ error: 'Exam paper not found' });
+      return;
+    }
+
+    if (!question.file_url) {
+      res.status(400).json({ error: 'No file URL available for re-processing' });
+      return;
+    }
+
+    // Update status to processing
+    await supabase
+      .from('questions')
+      .update({ status: 'processing', updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    // Import and run Gemini Vision OCR
+    const { extractTextFromBase64 } = await import('../../src/lib/ocr');
+    const { processUploadedQuestionFlow } = await import('../../src/ai/flows/process-uploaded-question');
+
+    // Fetch the file and convert to base64
+    const fetch = (await import('node-fetch')).default;
+    const response = await fetch(question.file_url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file: ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString('base64');
+    const mimeType = response.headers.get('content-type') || 'application/octet-stream';
+
+    console.log(`Re-processing OCR for question ${id} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
+
+    // Run Gemini Vision OCR
+    const { text: ocrText, confidence: ocrConfidence } = await extractTextFromBase64(base64, mimeType);
+
+    console.log(`OCR re-processing completed: ${ocrText.length} chars extracted`);
+
+    // Run AI metadata extraction with the new OCR text
+    const result = await processUploadedQuestionFlow({
+      uploadId: id,
+      ocrText,
+      filename: question.file_name || 'reprocessed.pdf',
+      uploaderId: 'admin-reprocess',
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'AI extraction failed during re-processing');
+    }
+
+    // Fetch the updated question
+    const { data: updatedQuestion, error: updateError } = await supabase
+      .from('questions')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (updateError) throw updateError;
+
+    res.json({
+      success: true,
+      question: updatedQuestion,
+      message: 'Exam paper re-processed successfully',
+      ocrConfidence,
+    });
+  } catch (error: any) {
+    console.error('Error re-processing exam paper:', error);
+    // Reset status back to pending on failure
+    try {
+      const supabaseClient = createServerSupabase();
+      await supabaseClient.from('questions').update({ status: 'pending', updated_at: new Date().toISOString() }).eq('id', id);
+    } catch (resetError) {
+      console.error('Failed to reset question status:', resetError);
+    }
+    res.status(500).json({ error: error.message || 'Failed to re-process exam paper' });
+  }
+});
+
 adminRouter.post('/:id/:action', requireAdmin, async (req, res) => {
   const id = String(req.params.id);
   const action = String(req.params.action);

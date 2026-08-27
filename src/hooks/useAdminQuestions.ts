@@ -106,3 +106,43 @@ export function useBulkModerateQuestion() {
     },
   });
 }
+
+/**
+ * Update exam paper content (admin only). Fields: title, institution, course, course_code, year, semester, type, content_preview, full_content, answer, explanation.
+ */
+export function useUpdateQuestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
+      return apiFetch<{ success: boolean; question: AdminQuestion }>(`/api/admin/questions/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+    },
+  });
+}
+
+/**
+ * Re-process an exam paper's OCR using Gemini Vision (admin only). Re-runs the full extraction pipeline.
+ */
+export function useReprocessQuestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      return apiFetch<{ success: boolean; question: AdminQuestion; ocrConfidence: Record<string, number> }>(`/api/admin/questions/${id}/reprocess`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+    },
+  });
+}

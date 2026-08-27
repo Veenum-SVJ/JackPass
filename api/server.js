@@ -61,6 +61,158 @@ var init_genkit = __esm({
   }
 });
 
+// src/lib/ocr.ts
+var ocr_exports = {};
+__export(ocr_exports, {
+  extractTextFromBase64: () => extractTextFromBase64,
+  extractTextFromFile: () => extractTextFromFile
+});
+async function mockExtractTextFromFile(file) {
+  await new Promise((resolve) => setTimeout(resolve, 1e3));
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  let mockText = "";
+  if (ext === "pdf") {
+    mockText = `[MOCK OCR] Extracted text from PDF: ${file.name}
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures and Algorithms
+2023/2024 Academic Session
+First Semester Examination
+
+Instruction: Answer ALL questions
+
+Question 1 (20 marks)
+(a) Define a binary search tree and explain its properties.
+(b) Write an algorithm to insert a node into a BST.
+(c) What is the time complexity of search operation in a BST?
+
+Question 2 (20 marks)
+(a) Explain the difference between BFS and DFS traversal.
+(b) Apply DFS to the following graph starting from vertex A.
+(c) What are the applications of BFS in real-world scenarios?`;
+  } else if (ext === "jpg" || ext === "jpeg" || ext === "png") {
+    mockText = `[MOCK OCR] Extracted text from image: ${file.name}
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures
+2023 First Semester
+
+Question 1: What is a binary search tree?
+Question 2: Explain BFS vs DFS`;
+  } else {
+    mockText = `Unsupported file type for OCR: ${ext}. Please upload PDF or image files.`;
+  }
+  return {
+    text: mockText,
+    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
+  };
+}
+async function fileToBase64(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  return buffer.toString("base64");
+}
+async function geminiExtractText(file, base64, mimeType) {
+  console.log(`Attempting Gemini Vision OCR for: ${file.name} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
+  const startTime = Date.now();
+  const { output } = await ai.generate({
+    prompt: [
+      {
+        text: `Extract ALL text from this academic exam paper image. Read every word carefully and transcribe it exactly as it appears.
+
+Rules:
+- Transcribe text faithfully \u2014 do not guess, fabricate, or summarize
+- Preserve the original formatting and structure (headings, numbered questions, sub-questions)
+- Include ALL visible text: institution name, course details, instructions, questions, and any other content
+- For Nigerian universities, recognize common abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, UNN, OOU, etc.
+- Course codes typically follow patterns like CSC/MTH/PHY/CHM/STA + 3 digits
+- If text is unclear or partially visible, include what you can read and note uncertainty
+
+Return ONLY the extracted text, nothing else.`
+      },
+      {
+        media: {
+          url: `data:${mimeType};base64,${base64}`
+        }
+      }
+    ]
+  });
+  const elapsed = Date.now() - startTime;
+  console.log(`Gemini Vision OCR completed in ${elapsed}ms`);
+  const extractedText = typeof output === "string" ? output : JSON.stringify(output);
+  if (!extractedText || extractedText.trim().length < 10) {
+    throw new Error("Gemini Vision returned empty or very short text");
+  }
+  console.log(`Gemini Vision extracted ${extractedText.length} characters`);
+  return {
+    text: extractedText,
+    confidence: {
+      overall: 0.95,
+      institution: 0.92,
+      course: 0.9,
+      year: 0.93,
+      semester: 0.91,
+      type: 0.88
+    }
+  };
+}
+async function extractTextFromBase64(base64, mimeType) {
+  const isPDF = mimeType === "application/pdf";
+  try {
+    console.log(`Attempting Gemini Vision OCR for base64 data (${mimeType})`);
+    const buffer = Buffer.from(base64, "base64");
+    const blob = new Blob([buffer], { type: mimeType });
+    const tempFile = new File([blob], `scan.${isPDF ? "pdf" : "jpg"}`, { type: mimeType });
+    const result = await geminiExtractText(tempFile, base64, mimeType);
+    console.log(`Gemini Vision OCR successful (${result.text.length} chars)`);
+    return result;
+  } catch (error) {
+    console.warn(`Gemini Vision OCR failed for base64 data, falling back to mock:`, error instanceof Error ? error.message : error);
+  }
+  console.log(`Using mock OCR for base64 data (${mimeType})`);
+  const mockText = isPDF ? `[MOCK OCR] Extracted text from PDF
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures and Algorithms
+2023/2024 Academic Session
+First Semester Examination` : `[MOCK OCR] Extracted text from image
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures
+2023 First Semester
+
+Question 1: What is a binary search tree?
+Question 2: Explain BFS vs DFS`;
+  return {
+    text: mockText,
+    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
+  };
+}
+async function extractTextFromFile(file) {
+  try {
+    console.log(`Starting Gemini Vision OCR for: ${file.name}`);
+    const base64 = await fileToBase64(file);
+    const mimeType = file.type || "application/octet-stream";
+    const result = await geminiExtractText(file, base64, mimeType);
+    console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
+    return result;
+  } catch (error) {
+    console.warn(`Gemini Vision OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
+  }
+  console.log(`Using mock OCR for: ${file.name}`);
+  return mockExtractTextFromFile(file);
+}
+var init_ocr = __esm({
+  "src/lib/ocr.ts"() {
+    "use strict";
+    init_genkit();
+  }
+});
+
 // src/ai/flows/extract-question-metadata.ts
 import { z } from "zod";
 var ExtractQuestionMetadataInputSchema, QuestionMetadataSchema, extractQuestionMetadataFlow;
@@ -167,7 +319,13 @@ var init_process_uploaded_question = __esm({
       uploadId: z2.string().uuid(),
       ocrText: z2.string(),
       filename: z2.string().optional(),
-      uploaderId: z2.string()
+      uploaderId: z2.string(),
+      // User-provided metadata from the upload form (used as primary source)
+      institution: z2.string().optional(),
+      course: z2.string().optional(),
+      courseCode: z2.string().optional(),
+      year: z2.string().optional(),
+      semester: z2.enum(["First", "Second"]).optional()
     });
     ProcessUploadedQuestionOutputSchema = z2.object({
       success: z2.boolean(),
@@ -182,7 +340,7 @@ var init_process_uploaded_question = __esm({
         inputSchema: ProcessUploadedQuestionInputSchema,
         outputSchema: ProcessUploadedQuestionOutputSchema
       },
-      async ({ uploadId, ocrText, filename, uploaderId }) => {
+      async ({ uploadId, ocrText, filename, uploaderId, institution: formInstitution, course: formCourse, courseCode: formCourseCode, year: formYear, semester: formSemester }) => {
         const supabase = createServerSupabase();
         try {
           console.log(`Starting AI metadata extraction for upload ${uploadId}`);
@@ -201,16 +359,20 @@ var init_process_uploaded_question = __esm({
           if (uploadError || !uploadRecord) {
             throw new Error(`Upload record not found: ${uploadError?.message}`);
           }
+          const rawYear = formYear || metadata.year || "";
+          const yearMatch = String(rawYear).match(/(\d{4})/);
+          const yearSession = yearMatch ? rawYear : String((/* @__PURE__ */ new Date()).getFullYear());
+          const yearStart = yearMatch ? yearMatch[1] : String((/* @__PURE__ */ new Date()).getFullYear());
           const questionData = {
             id: uuidv4(),
             title: metadata.title,
-            institution: metadata.institution,
-            course: metadata.course,
+            institution: formInstitution || metadata.institution,
+            course: formCourse || metadata.course,
             faculty: metadata.faculty,
             department: metadata.department,
-            year: metadata.year,
-            semester: metadata.semester,
-            type: metadata.type,
+            year: yearSession,
+            semester: formSemester || metadata.semester,
+            type: metadata.type || "Mixed",
             status: "pending",
             content_preview: metadata.contentPreview,
             full_content: metadata.fullContent,
@@ -224,7 +386,18 @@ var init_process_uploaded_question = __esm({
             created_at: (/* @__PURE__ */ new Date()).toISOString(),
             updated_at: (/* @__PURE__ */ new Date()).toISOString()
           };
-          const { data: question, error: questionError } = await supabase.from("questions").insert([questionData]).select().single();
+          if (formCourseCode) {
+            questionData.course_code = formCourseCode;
+          }
+          ;
+          let { data: question, error: questionError } = await supabase.from("questions").insert([questionData]).select().single();
+          if (questionError && yearSession !== yearStart) {
+            console.log(`Year format '${yearSession}' failed, retrying with '${yearStart}'`);
+            questionData.year = yearStart;
+            const retry = await supabase.from("questions").insert([questionData]).select().single();
+            question = retry.data;
+            questionError = retry.error;
+          }
           if (questionError) {
             throw new Error(`Failed to create question: ${questionError.message}`);
           }
@@ -596,6 +769,121 @@ adminRouter.get("/", requireAdmin, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch questions" });
   }
 });
+adminRouter.post("/bulk/:action", requireAdmin, async (req, res) => {
+  const action = String(req.params.action);
+  const user = res.locals.user;
+  try {
+    if (!["approve", "reject"].includes(action)) {
+      res.status(400).json({ error: 'Invalid action. Use "approve" or "reject"' });
+      return;
+    }
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: "ids must be a non-empty array" });
+      return;
+    }
+    const supabase = createServerSupabase();
+    const newStatus = action === "approve" ? "approved" : "rejected";
+    const { data, error } = await supabase.from("questions").update({
+      status: newStatus,
+      approved_at: (/* @__PURE__ */ new Date()).toISOString(),
+      approved_by: user.id,
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    }).in("id", ids).select();
+    if (error) throw error;
+    res.json({
+      success: true,
+      count: data?.length ?? 0,
+      message: `${data?.length ?? 0} exam paper(s) ${action}d successfully`
+    });
+  } catch (error) {
+    console.error(`Error bulk ${action}ing questions:`, error);
+    res.status(500).json({ error: error.message || `Failed to bulk ${action} questions` });
+  }
+});
+adminRouter.put("/:id", requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    const supabase = createServerSupabase();
+    const allowedFields = ["title", "institution", "course", "course_code", "year", "semester", "type", "content_preview", "full_content", "answer", "explanation"];
+    const updates = { updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+    for (const field of allowedFields) {
+      if (req.body[field] !== void 0) {
+        updates[field] = req.body[field];
+      }
+    }
+    if (Object.keys(updates).length <= 1) {
+      res.status(400).json({ error: "No valid fields to update" });
+      return;
+    }
+    const { data, error } = await supabase.from("questions").update(updates).eq("id", id).select().single();
+    if (error) throw error;
+    if (!data) {
+      res.status(404).json({ error: "Exam paper not found" });
+      return;
+    }
+    res.json({ success: true, question: data, message: "Exam paper updated successfully" });
+  } catch (error) {
+    console.error("Error updating exam paper:", error);
+    res.status(500).json({ error: error.message || "Failed to update exam paper" });
+  }
+});
+adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    const supabase = createServerSupabase();
+    const { data: question, error: fetchError } = await supabase.from("questions").select("id, file_url, file_name").eq("id", id).single();
+    if (fetchError || !question) {
+      res.status(404).json({ error: "Exam paper not found" });
+      return;
+    }
+    if (!question.file_url) {
+      res.status(400).json({ error: "No file URL available for re-processing" });
+      return;
+    }
+    await supabase.from("questions").update({ status: "processing", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
+    const { extractTextFromBase64: extractTextFromBase642 } = await Promise.resolve().then(() => (init_ocr(), ocr_exports));
+    const { processUploadedQuestionFlow: processUploadedQuestionFlow2 } = await Promise.resolve().then(() => (init_process_uploaded_question(), process_uploaded_question_exports));
+    const fetch2 = (await import("node-fetch")).default;
+    const response = await fetch2(question.file_url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file: ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
+    const mimeType = response.headers.get("content-type") || "application/octet-stream";
+    console.log(`Re-processing OCR for question ${id} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
+    const { text: ocrText, confidence: ocrConfidence } = await extractTextFromBase642(base64, mimeType);
+    console.log(`OCR re-processing completed: ${ocrText.length} chars extracted`);
+    const result = await processUploadedQuestionFlow2({
+      uploadId: id,
+      ocrText,
+      filename: question.file_name || "reprocessed.pdf",
+      uploaderId: "admin-reprocess"
+    });
+    if (!result.success) {
+      throw new Error(result.error || "AI extraction failed during re-processing");
+    }
+    const { data: updatedQuestion, error: updateError } = await supabase.from("questions").select("*").eq("id", id).single();
+    if (updateError) throw updateError;
+    res.json({
+      success: true,
+      question: updatedQuestion,
+      message: "Exam paper re-processed successfully",
+      ocrConfidence
+    });
+  } catch (error) {
+    console.error("Error re-processing exam paper:", error);
+    try {
+      const supabaseClient = createServerSupabase();
+      await supabaseClient.from("questions").update({ status: "pending", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
+    } catch (resetError) {
+      console.error("Failed to reset question status:", resetError);
+    }
+    res.status(500).json({ error: error.message || "Failed to re-process exam paper" });
+  }
+});
 adminRouter.post("/:id/:action", requireAdmin, async (req, res) => {
   const id = String(req.params.id);
   const action = String(req.params.action);
@@ -704,156 +992,9 @@ import multer from "multer";
 
 // src/lib/upload.ts
 init_supabase_server();
-
-// src/lib/ocr.ts
-async function mockExtractTextFromFile(file) {
-  await new Promise((resolve) => setTimeout(resolve, 1e3));
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  let mockText = "";
-  if (ext === "pdf") {
-    mockText = `[MOCK OCR] Extracted text from PDF: ${file.name}
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures and Algorithms
-2023/2024 Academic Session
-First Semester Examination
-
-Instruction: Answer ALL questions
-
-Question 1 (20 marks)
-(a) Define a binary search tree and explain its properties.
-(b) Write an algorithm to insert a node into a BST.
-(c) What is the time complexity of search operation in a BST?
-
-Question 2 (20 marks)
-(a) Explain the difference between BFS and DFS traversal.
-(b) Apply DFS to the following graph starting from vertex A.
-(c) What are the applications of BFS in real-world scenarios?`;
-  } else if (ext === "jpg" || ext === "jpeg" || ext === "png") {
-    mockText = `[MOCK OCR] Extracted text from image: ${file.name}
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures
-2023 First Semester
-
-Question 1: What is a binary search tree?
-Question 2: Explain BFS vs DFS`;
-  } else {
-    mockText = `Unsupported file type for OCR: ${ext}. Please upload PDF or image files.`;
-  }
-  return {
-    text: mockText,
-    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
-  };
-}
-async function fileToBase64(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return buffer.toString("base64");
-}
-async function hfExtractTextFromBase64(base64) {
-  const hfToken = process.env.HF_TOKEN;
-  if (!hfToken) throw new Error("HF_TOKEN not set");
-  const apiUrl = "https://api-inference.huggingface.co/models/baidu/Unlimited-OCR";
-  const binaryData = Buffer.from(base64, "base64");
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${hfToken}`,
-      "Content-Type": "application/octet-stream"
-    },
-    body: binaryData
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`HF API error (${response.status}): ${errorText}`);
-  }
-  const result = await response.json();
-  const extractedText = parseOCRResponse(result);
-  if (!extractedText || extractedText.trim().length < 10) {
-    throw new Error("OCR returned empty or very short text");
-  }
-  return {
-    text: extractedText,
-    confidence: { overall: 0.9, institution: 0.85, course: 0.85, year: 0.9, semester: 0.9, type: 0.85 }
-  };
-}
-function parseOCRResponse(result) {
-  if (typeof result === "string") return result;
-  if (Array.isArray(result)) return result.join("\n\n");
-  if (result?.generated_text) return result.generated_text;
-  if (result?.[0]?.generated_text) return result[0].generated_text;
-  try {
-    return JSON.stringify(result);
-  } catch {
-    return "Failed to parse OCR response";
-  }
-}
-async function extractTextFromFile(file) {
-  const hfToken = process.env.HF_TOKEN;
-  if (hfToken) {
-    try {
-      console.log(`Attempting Baidu Unlimited-OCR for: ${file.name}`);
-      const base64 = await fileToBase64(file);
-      const result = await hfExtractTextFromBase64(base64);
-      console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
-      return result;
-    } catch (error) {
-      console.warn(`HF OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
-    }
-  }
-  console.log(`Using mock OCR for: ${file.name}`);
-  return mockExtractTextFromFile(file);
-}
-
-// src/lib/upload.ts
+init_ocr();
 init_process_uploaded_question();
 import { v4 as uuidv42 } from "uuid";
-async function processQuestionUpload(file, uploaderId, _metadata = {}) {
-  const supabase = createServerSupabase();
-  const fileExt = file.name.split(".").pop();
-  const storageFileName = `${uploaderId}/${uuidv42()}.${fileExt}`;
-  const { error: uploadError } = await supabase.storage.from("question-files").upload(storageFileName, file, {
-    contentType: file.type,
-    upsert: false
-  });
-  if (uploadError) {
-    throw new Error(`Failed to upload file: ${uploadError.message}`);
-  }
-  const { data: urlData } = supabase.storage.from("question-files").getPublicUrl(storageFileName);
-  const fileUrl = urlData.publicUrl;
-  const uploadRecord = {
-    id: uuidv42(),
-    uploader_id: uploaderId,
-    file_name: file.name,
-    file_url: fileUrl,
-    file_type: file.type,
-    file_size: file.size,
-    upload_status: "uploading",
-    ocr_text: null,
-    ocr_confidence: null,
-    uploaded_at: (/* @__PURE__ */ new Date()).toISOString(),
-    processed_at: null
-  };
-  const { data: uploadRecordData, error: uploadRecordError } = await supabase.from("question_uploads").insert([uploadRecord]).select().single();
-  if (uploadRecordError) {
-    await supabase.storage.from("question-files").remove([storageFileName]);
-    throw new Error(`Failed to save upload record: ${uploadRecordError.message}`);
-  }
-  try {
-    await processOcrSync(uploadRecordData.id, file, storageFileName);
-  } catch (ocrError) {
-    console.error("OCR processing failed (non-fatal):", ocrError);
-  }
-  return {
-    upload: uploadRecordData,
-    ocrText: null,
-    ocrConfidence: null,
-    fileUrl
-  };
-}
 async function processLinkImport(fileUrl, uploaderId, _metadata = {}) {
   const supabase = createServerSupabase();
   const { v4: uuidv43 } = await import("uuid");
@@ -874,7 +1015,7 @@ async function processLinkImport(fileUrl, uploaderId, _metadata = {}) {
   if (insertError) {
     throw new Error(`Failed to save upload record: ${insertError.message}`);
   }
-  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId).catch((err) => {
+  processLinkImportAsync(uploadRecordData.id, fileUrl, uploaderId, _metadata).catch((err) => {
     console.error("Link import processing failed:", err);
   });
   return {
@@ -884,7 +1025,7 @@ async function processLinkImport(fileUrl, uploaderId, _metadata = {}) {
     fileUrl
   };
 }
-async function processLinkImportAsync(uploadId, fileUrl, uploaderId) {
+async function processLinkImportAsync(uploadId, fileUrl, uploaderId, formMetadata) {
   const supabase = createServerSupabase();
   try {
     const { processQuestionDocument: processQuestionDocument2 } = await Promise.resolve().then(() => (init_process_question_document(), process_question_document_exports));
@@ -903,7 +1044,12 @@ async function processLinkImportAsync(uploadId, fileUrl, uploaderId) {
       uploadId,
       ocrText: result.fullContent,
       filename: `link-import-${Date.now()}.pdf`,
-      uploaderId
+      uploaderId,
+      institution: formMetadata?.institution,
+      course: formMetadata?.course,
+      courseCode: formMetadata?.courseCode,
+      year: formMetadata?.year,
+      semester: formMetadata?.semester
     });
     console.log(`Link import ${uploadId} processed successfully`);
   } catch (error) {
@@ -915,39 +1061,115 @@ async function processLinkImportAsync(uploadId, fileUrl, uploaderId) {
     }).eq("id", uploadId);
   }
 }
-async function processOcrSync(uploadId, file, _storageFileName) {
+async function processQuestionUploadMulti(files, uploaderId, metadata = {}) {
   const supabase = createServerSupabase();
-  try {
-    await supabase.from("question_uploads").update({ upload_status: "processing" }).eq("id", uploadId);
-    const { text: ocrText, confidence: ocrConfidence } = await extractTextFromFile(file);
-    const { error: updateError } = await supabase.from("question_uploads").update({
-      upload_status: "processed",
-      ocr_text: ocrText,
-      ocr_confidence: JSON.stringify(ocrConfidence),
-      processed_at: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", uploadId);
-    if (updateError) {
-      console.error("Failed to update upload record with OCR results:", updateError);
+  const pageCount = files.length;
+  console.log(`Processing ${pageCount}-page upload for user ${uploaderId}`);
+  const uploadRecords = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const fileExt = file.name.split(".").pop();
+    const storageFileName = `${uploaderId}/${uuidv42()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage.from("question-files").upload(storageFileName, file, {
+      contentType: file.type,
+      upsert: false
+    });
+    if (uploadError) {
+      for (const rec of uploadRecords) {
+        const path = rec.file_url.split("/question-files/")[1];
+        if (path) await supabase.storage.from("question-files").remove([path]);
+      }
+      throw new Error(`Failed to upload page ${i + 1}: ${uploadError.message}`);
     }
-    console.log(`OCR completed for upload ${uploadId}`);
-    const { data: uploadRecord } = await supabase.from("question_uploads").select("uploader_id").eq("id", uploadId).single();
-    if (ocrText.length > 50) {
-      const uploaderId = uploadRecord?.uploader_id || "unknown";
-      processUploadedQuestionFlow({
-        uploadId,
-        ocrText,
-        filename: file.name,
-        uploaderId
-      }).catch((err) => console.error("AI extraction failed:", err));
+    const { data: urlData } = supabase.storage.from("question-files").getPublicUrl(storageFileName);
+    const uploadRecord = {
+      id: uuidv42(),
+      uploader_id: uploaderId,
+      file_name: file.name,
+      file_url: urlData.publicUrl,
+      file_type: file.type,
+      file_size: file.size,
+      upload_status: "uploading",
+      ocr_text: null,
+      ocr_confidence: null,
+      uploaded_at: (/* @__PURE__ */ new Date()).toISOString(),
+      processed_at: null
+    };
+    const { data: recordData, error: recordError } = await supabase.from("question_uploads").insert([uploadRecord]).select().single();
+    if (recordError) {
+      throw new Error(`Failed to save upload record for page ${i + 1}: ${recordError.message}`);
     }
-  } catch (error) {
-    console.error("OCR processing failed:", error);
-    await supabase.from("question_uploads").update({
-      upload_status: "failed",
-      ocr_text: `OCR failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-      processed_at: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("id", uploadId);
+    uploadRecords.push({
+      id: recordData.id,
+      file_url: urlData.publicUrl,
+      file_name: file.name
+    });
   }
+  const ocrResults = [];
+  for (let i = 0; i < files.length; i++) {
+    try {
+      const currentFile = files[i];
+      const currentUpload = uploadRecords[i];
+      console.log(`Running OCR on page ${i + 1}/${pageCount} (${currentFile.name})...`);
+      const { text, confidence } = await extractTextFromFile(currentFile);
+      ocrResults.push({ text, confidence: confidence.overall ?? 0.8, pageIndex: i });
+      await supabase.from("question_uploads").update({
+        upload_status: "processed",
+        ocr_text: text,
+        ocr_confidence: JSON.stringify({ overall: confidence.overall }),
+        processed_at: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("id", currentUpload.id);
+      console.log(`OCR completed for page ${i + 1}: ${text.length} chars`);
+    } catch (ocrError) {
+      console.error(`OCR failed for page ${i + 1} (non-fatal):`, ocrError);
+      await supabase.from("question_uploads").update({
+        upload_status: "failed",
+        ocr_text: `OCR failed: ${ocrError instanceof Error ? ocrError.message : "Unknown error"}`,
+        processed_at: (/* @__PURE__ */ new Date()).toISOString()
+      }).eq("id", uploadRecords[i].id);
+    }
+  }
+  const combinedOcrText = ocrResults.sort((a, b) => a.pageIndex - b.pageIndex).map((r, idx) => `--- PAGE ${idx + 1} ---
+${r.text}`).join("\n\n");
+  const primaryUpload = uploadRecords[0];
+  processUploadedQuestionFlow({
+    uploadId: primaryUpload.id,
+    ocrText: combinedOcrText,
+    filename: files[0].name,
+    uploaderId,
+    institution: metadata.institution,
+    course: metadata.course,
+    courseCode: metadata.courseCode,
+    year: metadata.year,
+    semester: metadata.semester
+  }).then(async (result) => {
+    if (result.success && result.questionId && pageCount > 1) {
+      const allPageUrls = uploadRecords.map((r, idx) => ({
+        page: idx + 1,
+        url: r.file_url,
+        fileName: r.file_name,
+        uploadId: r.id
+      }));
+      const { data: existingQ } = await supabase.from("questions").select("ai_extracted_data").eq("id", result.questionId).single();
+      await supabase.from("questions").update({
+        ai_extracted_data: {
+          ...existingQ?.ai_extracted_data || {},
+          page_count: pageCount,
+          pages: allPageUrls
+        }
+      }).eq("id", result.questionId);
+      for (let i = 1; i < uploadRecords.length; i++) {
+        await supabase.from("question_uploads").update({ question_id: result.questionId }).eq("id", uploadRecords[i].id);
+      }
+      console.log(`Multi-page question created: ${result.questionId} with ${pageCount} pages`);
+    }
+  }).catch((err) => console.error("AI extraction failed for multi-page upload:", err));
+  return {
+    uploadId: primaryUpload.id,
+    fileUrl: primaryUpload.file_url,
+    pageCount,
+    uploadRecords
+  };
 }
 async function getUploadStatus(uploadId) {
   const supabase = createServerSupabase();
@@ -969,8 +1191,7 @@ var uploadRouter = Router3();
 uploadRouter.post("/", requireAuth, upload.any(), async (req, res) => {
   try {
     const user = res.locals.user;
-    const files = req.files ?? [];
-    const file = files[0];
+    const allFiles = req.files ?? [];
     const fileUrl = typeof req.body.fileUrl === "string" ? req.body.fileUrl : void 0;
     const title = typeof req.body.title === "string" ? req.body.title : void 0;
     const institution = typeof req.body.institution === "string" ? req.body.institution : void 0;
@@ -979,16 +1200,17 @@ uploadRouter.post("/", requireAuth, upload.any(), async (req, res) => {
     const yearRaw = typeof req.body.year === "string" ? req.body.year.trim() : void 0;
     const semester = req.body.semester;
     const type = req.body.type;
-    if (fileUrl && !file) {
-      const result2 = await processLinkImport(fileUrl, user.id, {
-        title,
-        institution,
-        course: course || void 0,
-        courseCode: courseCode || void 0,
-        year: yearRaw || void 0,
-        semester: semester || void 0,
-        type: type || void 0
-      });
+    const metadata = {
+      title,
+      institution,
+      course: course || void 0,
+      courseCode: courseCode || void 0,
+      year: yearRaw || void 0,
+      semester: semester || void 0,
+      type: type || void 0
+    };
+    if (fileUrl && allFiles.length === 0) {
+      const result2 = await processLinkImport(fileUrl, user.id, metadata);
       res.json({
         success: true,
         uploadId: result2.upload.id,
@@ -998,36 +1220,32 @@ uploadRouter.post("/", requireAuth, upload.any(), async (req, res) => {
       });
       return;
     }
-    if (!file) {
+    if (allFiles.length === 0) {
       res.status(400).json({ error: "No file or link provided" });
       return;
     }
     const allowedTypes = ["application/pdf", "image/jpeg", "image/png"];
     const maxSize = 10 * 1024 * 1024;
-    if (!allowedTypes.includes(file.mimetype)) {
-      res.status(400).json({ error: "Invalid file type. Only PDF and image files are allowed." });
-      return;
+    for (const file of allFiles) {
+      if (!allowedTypes.includes(file.mimetype)) {
+        res.status(400).json({ error: `Invalid file type for ${file.originalname}. Only PDF and image files are allowed.` });
+        return;
+      }
+      if (file.size > maxSize) {
+        res.status(400).json({ error: `File ${file.originalname} exceeds 10 MB limit` });
+        return;
+      }
     }
-    if (file.size > maxSize) {
-      res.status(400).json({ error: "File size exceeds 10 MB limit" });
-      return;
-    }
-    const nodeFile = new File([file.buffer], file.originalname, { type: file.mimetype });
-    const result = await processQuestionUpload(nodeFile, user.id, {
-      title,
-      institution,
-      course: course || void 0,
-      courseCode: courseCode || void 0,
-      year: yearRaw || void 0,
-      semester: semester || void 0,
-      type: type || void 0
-    });
+    const nodeFiles = allFiles.map(
+      (f) => new File([f.buffer], f.originalname, { type: f.mimetype })
+    );
+    const result = await processQuestionUploadMulti(nodeFiles, user.id, metadata);
     res.json({
       success: true,
-      uploadId: result.upload.id,
+      uploadId: result.uploadId,
       fileUrl: result.fileUrl,
-      ocrText: result.ocrText,
-      message: "File uploaded and processed successfully"
+      pageCount: result.pageCount,
+      message: result.pageCount > 1 ? `${result.pageCount}-page question paper uploaded and processed successfully` : "File uploaded and processed successfully"
     });
   } catch (error) {
     console.error("Upload error:", error);
