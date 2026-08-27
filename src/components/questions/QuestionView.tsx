@@ -58,28 +58,47 @@ export default function QuestionView({ question }: { question: Question }) {
         <CardContent>
           {(() => {
             const totalMarks = question.marksScheme?.reduce((sum, q) => sum + (q.totalMarks || 0), 0) || 0;
-            const hasAnswer = !!(question.answerGenerated || question.answer);
+            const answerText = (question.answerGenerated || question.answer || '').toLowerCase();
             if (totalMarks === 0) return null;
             const parts = question.marksScheme || [];
+            // Calculate total covered marks across all questions
+            let totalCovered = 0;
+            for (const q of parts) {
+              for (const p of (q.parts || [])) {
+                const label = p.label.toLowerCase().replace(/[()]/g, '');
+                if (answerText.includes(label)) totalCovered += p.marks;
+              }
+            }
+            const allCovered = totalCovered >= totalMarks;
+            const someCovered = totalCovered > 0 && !allCovered;
+
             return (
-              <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20 rounded-lg">
+              <div className={cn('mb-4 p-3 border rounded-lg', allCovered ? 'bg-emerald-50 dark:bg-emerald-400/10 border-emerald-200 dark:border-emerald-400/20' : someCovered ? 'bg-yellow-50 dark:bg-yellow-400/10 border-yellow-200 dark:border-yellow-400/20' : 'bg-red-50 dark:bg-red-400/10 border-red-200 dark:border-red-400/20')}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                  <span className={cn('text-xs font-medium flex items-center gap-1', allCovered ? 'text-emerald-800 dark:text-emerald-300' : someCovered ? 'text-yellow-800 dark:text-yellow-300' : 'text-red-800 dark:text-red-300')}>
                     <BookOpen className="h-3 w-3" /> Marks Available: {totalMarks}
                   </span>
-                  <span className={cn('text-xs font-medium', hasAnswer ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
-                    {hasAnswer ? 'Answer Available' : 'No Answer Yet'}
+                  <span className={cn('text-xs font-medium', allCovered ? 'text-emerald-600 dark:text-emerald-400' : someCovered ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400')}>
+                    {allCovered ? 'Fully Answered' : someCovered ? `${totalCovered}/${totalMarks} marks covered` : 'No Answer Yet'}
                   </span>
                 </div>
-                <div className="w-full bg-amber-200 dark:bg-amber-800 rounded-full h-2 mb-2">
-                  <div className={cn('h-2 rounded-full transition-all duration-500', hasAnswer ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-amber-400 dark:bg-amber-500')} style={{ width: hasAnswer ? '100%' : '0%' }} />
+                <div className={cn('w-full rounded-full h-2 mb-2', allCovered ? 'bg-emerald-200 dark:bg-emerald-800' : someCovered ? 'bg-yellow-200 dark:bg-yellow-800' : 'bg-red-200 dark:bg-red-800')}>
+                  <div className={cn('h-2 rounded-full transition-all duration-500', allCovered ? 'bg-emerald-500 dark:bg-emerald-400' : someCovered ? 'bg-yellow-500 dark:bg-yellow-400' : 'bg-red-400 dark:bg-red-500')} style={{ width: `${totalMarks > 0 ? (totalCovered / totalMarks) * 100 : 0}%` }} />
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {parts.map((q, i) => (
-                    <div key={i} className="text-xs bg-white dark:bg-background border border-amber-200 dark:border-amber-700 rounded px-2 py-0.5">
-                      Q{q.question}: {q.totalMarks}m
-                    </div>
-                  ))}
+                  {parts.map((q, i) => {
+                    const qCovered = (q.parts || []).reduce((sum, p) => {
+                      const label = p.label.toLowerCase().replace(/[()]/g, '');
+                      return sum + (answerText.includes(label) ? p.marks : 0);
+                    }, 0);
+                    const qAll = qCovered >= q.totalMarks;
+                    const qSome = qCovered > 0 && !qAll;
+                    return (
+                      <div key={i} className={cn('text-xs border rounded px-2 py-0.5', qAll ? 'bg-emerald-100 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300' : qSome ? 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300' : 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-800 dark:text-red-300')}>
+                        Q{q.question}: {qCovered}/{q.totalMarks}m
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -127,14 +146,14 @@ export default function QuestionView({ question }: { question: Question }) {
                               const isFullyCovered = coveredMarks >= q.totalMarks;
                               const isPartial = coveredMarks > 0 && !isFullyCovered;
                               return (
-                                <div key={i} className={cn('border rounded p-3', isFullyCovered ? 'bg-emerald-50 dark:bg-emerald-400/10 border-emerald-200 dark:border-emerald-400/20' : isPartial ? 'bg-amber-50 dark:bg-amber-400/10 border-amber-200 dark:border-amber-400/20' : 'bg-muted/50 border-border')}>
+                                <div key={i} className={cn('border rounded p-3', isFullyCovered ? 'bg-emerald-50 dark:bg-emerald-400/10 border-emerald-200 dark:border-emerald-400/20' : isPartial ? 'bg-yellow-50 dark:bg-yellow-400/10 border-yellow-200 dark:border-yellow-400/20' : 'bg-red-50 dark:bg-red-400/10 border-red-200 dark:border-red-400/20')}>
                                   <div className="flex items-center justify-between mb-1">
-                                    <p className={cn('font-semibold text-sm', isFullyCovered ? 'text-emerald-800 dark:text-emerald-300' : isPartial ? 'text-amber-800 dark:text-amber-300' : 'text-muted-foreground')}>Question {q.question}</p>
-                                    <span className={cn('text-xs font-mono', isFullyCovered ? 'text-emerald-600 dark:text-emerald-400' : isPartial ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>{coveredMarks}/{q.totalMarks} marks</span>
+                                    <p className={cn('font-semibold text-sm', isFullyCovered ? 'text-emerald-800 dark:text-emerald-300' : isPartial ? 'text-yellow-800 dark:text-yellow-300' : 'text-red-800 dark:text-red-300')}>Question {q.question}</p>
+                                    <span className={cn('text-xs font-mono', isFullyCovered ? 'text-emerald-600 dark:text-emerald-400' : isPartial ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400')}>{coveredMarks}/{q.totalMarks} marks</span>
                                   </div>
                                   {/* Overall question progress bar */}
                                   <div className="w-full bg-border rounded-full h-1.5 mb-2">
-                                    <div className={cn('h-1.5 rounded-full transition-all duration-500', isFullyCovered ? 'bg-emerald-500 dark:bg-emerald-400' : isPartial ? 'bg-amber-500 dark:bg-amber-400' : 'bg-muted-foreground/20')} style={{ width: `${q.totalMarks > 0 ? (coveredMarks / q.totalMarks) * 100 : 0}%` }} />
+                                    <div className={cn('h-1.5 rounded-full transition-all duration-500', isFullyCovered ? 'bg-emerald-500 dark:bg-emerald-400' : isPartial ? 'bg-yellow-500 dark:bg-yellow-400' : 'bg-red-400 dark:bg-red-500')} style={{ width: `${q.totalMarks > 0 ? (coveredMarks / q.totalMarks) * 100 : 0}%` }} />
                                   </div>
                                   {parts.length > 0 && (
                                     <div className="space-y-1.5">
@@ -145,9 +164,9 @@ export default function QuestionView({ question }: { question: Question }) {
                                           <div key={j} className="flex items-center gap-2">
                                             <span className="text-xs font-mono text-muted-foreground w-8 shrink-0">{p.label}</span>
                                             <div className="flex-1 bg-border rounded-full h-1.5">
-                                              <div className={cn('h-1.5 rounded-full transition-all duration-500', partCovered ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-muted-foreground/20')} style={{ width: partCovered ? '100%' : '0%' }} />
+                                              <div className={cn('h-1.5 rounded-full transition-all duration-500', partCovered ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-red-400 dark:bg-red-500')} style={{ width: partCovered ? '100%' : '0%' }} />
                                             </div>
-                                            <span className={cn('text-xs w-20 text-right shrink-0', partCovered ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-muted-foreground')}>{p.marks}m {partCovered ? '✓' : ''}</span>
+                                            <span className={cn('text-xs w-20 text-right shrink-0', partCovered ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-red-500 dark:text-red-400')}>{p.marks}m {partCovered ? '✓' : '✗'}</span>
                                           </div>
                                         );
                                       })}
