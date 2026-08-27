@@ -2,8 +2,9 @@ import { useState } from 'react';
 import type { Question } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Eye, EyeOff, ArrowLeft, ArrowRight, Lightbulb, ExternalLink, GraduationCap, Star } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, ArrowRight, Lightbulb, ExternalLink, GraduationCap, Star, BookOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 export default function QuestionView({ question }: { question: Question }) {
   const [showAnswer, setShowAnswer] = useState(false);
@@ -55,6 +56,34 @@ export default function QuestionView({ question }: { question: Question }) {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {(() => {
+            const totalMarks = question.marksScheme?.reduce((sum, q) => sum + (q.totalMarks || 0), 0) || 0;
+            const hasAnswer = !!(question.answerGenerated || question.answer);
+            if (totalMarks === 0) return null;
+            const parts = question.marksScheme || [];
+            return (
+              <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                    <BookOpen className="h-3 w-3" /> Marks Available: {totalMarks}
+                  </span>
+                  <span className={cn('text-xs font-medium', hasAnswer ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')}>
+                    {hasAnswer ? 'Answer Available' : 'No Answer Yet'}
+                  </span>
+                </div>
+                <div className="w-full bg-amber-200 dark:bg-amber-800 rounded-full h-2 mb-2">
+                  <div className={cn('h-2 rounded-full transition-all duration-500', hasAnswer ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-amber-400 dark:bg-amber-500')} style={{ width: hasAnswer ? '100%' : '0%' }} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {parts.map((q, i) => (
+                    <div key={i} className="text-xs bg-white dark:bg-background border border-amber-200 dark:border-amber-700 rounded px-2 py-0.5">
+                      Q{q.question}: {q.totalMarks}m
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <Button onClick={() => setShowAnswer(!showAnswer)} variant="outline" className="mb-4">
             {showAnswer ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
             {showAnswer ? 'Hide Answer' : 'Show Answer'}
@@ -84,19 +113,31 @@ export default function QuestionView({ question }: { question: Question }) {
                   {question.marksScheme && question.marksScheme.length > 0 && (
                     <div className="mt-3 pt-3 border-t">
                       <h4 className="font-bold font-headline mb-2">Marks Allocation:</h4>
-                      <div className="space-y-2">
-                        {question.marksScheme.map((q, i) => (
-                          <div key={i} className="bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20 rounded p-2">
-                            <p className="font-semibold text-amber-800 dark:text-amber-300 text-sm">Question {q.question} — {q.totalMarks} marks</p>
-                            {q.parts && q.parts.length > 0 && (
-                              <div className="ml-3 mt-1">
-                                {q.parts.map((p, j) => (
-                                  <p key={j} className="text-xs text-muted-foreground"><span className="font-mono">{p.label}</span> {p.marks} marks {p.text && `- ${p.text}`}</p>
-                                ))}
+                      <div className="space-y-3">
+                        {question.marksScheme.map((q, i) => {
+                          const maxPartMarks = q.parts && q.parts.length > 0 ? Math.max(...q.parts.map(p => p.marks)) : q.totalMarks;
+                          return (
+                            <div key={i} className="bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20 rounded p-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="font-semibold text-amber-800 dark:text-amber-300 text-sm">Question {q.question}</p>
+                                <span className="text-xs font-mono text-amber-600 dark:text-amber-400">{q.totalMarks} marks</span>
                               </div>
-                            )}
-                          </div>
-                        ))}
+                              {q.parts && q.parts.length > 0 && (
+                                <div className="space-y-1.5">
+                                  {q.parts.map((p, j) => (
+                                    <div key={j} className="flex items-center gap-2">
+                                      <span className="text-xs font-mono text-muted-foreground w-8 shrink-0">{p.label}</span>
+                                      <div className="flex-1 bg-amber-200 dark:bg-amber-800 rounded-full h-1.5">
+                                        <div className="bg-amber-500 dark:bg-amber-400 h-1.5 rounded-full" style={{ width: `${(p.marks / maxPartMarks) * 100}%` }} />
+                                      </div>
+                                      <span className="text-xs text-muted-foreground w-12 text-right shrink-0">{p.marks}m {p.text && <span className="text-xs">— {p.text}</span>}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
