@@ -139,7 +139,7 @@ export function useReprocessQuestion() {
 
   return useMutation({
     mutationFn: async ({ id, signal }: { id: string; signal?: AbortSignal }) => {
-      return apiFetch<{ success: boolean; question: AdminQuestion; ocrConfidence: Record<string, number> }>(`/api/admin/questions/${id}/reprocess`, {
+      return apiFetch<{ success: boolean; question: AdminQuestion; ocrConfidence: Record<string, number>; timing?: { fetchFile: number; aiProcessing: number; saveResults: number; total: number } }>(`/api/admin/questions/${id}/reprocess`, {
         method: 'POST',
         signal,
       });

@@ -265,6 +265,7 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
     };
 
     // Update status to processing
+    const totalStart = Date.now();
     await supabase
       .from('questions')
       .update({ status: 'processing', updated_at: new Date().toISOString(), ai_extracted_data: { reprocess_step: 'starting' } })
@@ -276,6 +277,7 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
     const { z } = await import('zod');
 
     // Step 1: Fetch file
+    const fileStart = Date.now();
     await updateStep('fetching_file');
     const fetch = (await import('node-fetch')).default;
     const response = await fetch(question.file_url);
@@ -287,6 +289,7 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
     const base64 = buffer.toString('base64');
     const mimeType = response.headers.get('content-type') || 'application/octet-stream';
 
+    const fileTime = Date.now() - fileStart;
     console.log(`Re-processing question ${id} with single Gemini call (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
 
     // Single Gemini call: extract text AND structured metadata from the image
@@ -330,9 +333,10 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       config: { temperature: 0.1 },
     });
 
-    const elapsed = Date.now() - startTime;
-    console.log(`Single Gemini call completed in ${elapsed}ms`);
+    const aiTime = Date.now() - startTime;
+    console.log(`Single Gemini call completed in ${aiTime}ms`);
     // Step 3: Processing results
+    const saveStart = Date.now();
     await updateStep('processing_results');
     // Step 3: Processing results
     await updateStep('processing_results');
@@ -398,6 +402,9 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       throw new Error(`Failed to update question: ${updateError.message}`);
     }
 
+    const saveTime = Date.now() - saveStart;
+    const totalTime = Date.now() - totalStart;
+
     // Step 4: Complete
     await updateStep('complete');
 
@@ -415,6 +422,7 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       question: updatedQuestion,
       message: 'Exam paper re-processed successfully',
       ocrConfidence: { overall: 0.95 },
+      timing: { fetchFile: fileTime, aiProcessing: aiTime, saveResults: saveTime, total: totalTime },
     });
   } catch (error: any) {
     console.error('Error re-processing exam paper:', error);
@@ -461,21 +469,23 @@ adminRouter.post('/:id/generate-answer', requireAdmin, async (req, res) => {
       config: { temperature: 0.3 },
     });
 
-    const elapsed = Date.now() - startTime;
-    console.log(`Answer generation completed in ${elapsed}ms`);
+    const aiTime = Date.now() - startTime;
+    console.log(`Answer generation completed in ${aiTime}ms`);
 
     if (!output) { throw new Error('AI failed to generate answer'); }
 
+    const saveStart = Date.now();
     const { error: updateError } = await supabase
       .from('questions')
       .update({ answer_generated: output.answer, explanation: output.explanation, updated_at: new Date().toISOString() })
       .eq('id', id);
     if (updateError) { throw new Error(`Failed to update: ${updateError.message}`); }
+    const saveTime = Date.now() - saveStart;
 
     const { data: updated, error: fetchErr } = await supabase.from('questions').select('*').eq('id', id).single();
     if (fetchErr) throw fetchErr;
 
-    res.json({ success: true, question: updated, message: 'Answer generated successfully' });
+    res.json({ success: true, question: updated, message: 'Answer generated successfully', timing: { aiProcessing: aiTime, saveResults: saveTime, total: aiTime + saveTime } });
   } catch (error: any) {
     console.error('Error generating answer:', error);
     res.status(500).json({ error: error.message || 'Failed to generate answer' });

@@ -209,11 +209,12 @@ export default function AdminQuestionsPage() {
     const wasCancelled = bulkGenCancelled.current || bulkGenAbort.current.signal.aborted;
     bulkGenAbort.current = null;
     setBulkGenProgress(null);
+    const genElapsed = ((Date.now() - bulkGenStartRef.current) / 1000).toFixed(0);
     toast({
       title: wasCancelled ? 'Generation Cancelled' : 'Bulk Generation Complete',
       description: wasCancelled
-        ? `${done} answer(s) generated before cancellation.`
-        : `${done} answer(s) generated successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
+        ? `${done} answer(s) generated before cancellation. (~${genElapsed}s elapsed)`
+        : `${done} answer(s) generated successfully${failed > 0 ? `, ${failed} failed` : ''}. Total: ${genElapsed}s.`,
     });
   };
 
@@ -429,9 +430,10 @@ export default function AdminQuestionsPage() {
                 const wasCancelled = bulkReprocessCancelled.current || bulkReprocessAbort.current.signal.aborted;
                 bulkReprocessAbort.current = null;
                 setBulkReprocessProgress(null);
+                const rpElapsed = ((Date.now() - bulkReprocessStartRef.current) / 1000).toFixed(0);
                 toast({ title: wasCancelled ? 'Re-process Cancelled' : 'Re-process Complete', description: wasCancelled
-                  ? `${done} paper(s) re-processed before cancellation.`
-                  : `${done} paper(s) re-processed${failed > 0 ? `, ${failed} failed` : ''}.` });
+                  ? `${done} paper(s) re-processed before cancellation. (~${rpElapsed}s elapsed)`
+                  : `${done} paper(s) re-processed${failed > 0 ? `, ${failed} failed` : ''}. Total: ${rpElapsed}s.` });
               }}
               disabled={reprocessQuestion.isPending || !!bulkReprocessProgress}
             >
@@ -713,7 +715,7 @@ export default function AdminQuestionsPage() {
                   reprocessQuestion.mutate(
                     { id: question.id },
                     {
-                      onSuccess: () => { setReprocessingId(null); toast({ title: 'OCR Re-processed', description: 'Gemini Vision has re-extracted the text from the original image.' }); },
+                      onSuccess: (data) => { setReprocessingId(null); const t = data?.timing; toast({ title: 'Re-process Complete', description: t ? `File: ${(t.fetchFile / 1000).toFixed(1)}s · AI: ${(t.aiProcessing / 1000).toFixed(1)}s · Save: ${(t.saveResults / 1000).toFixed(1)}s · Total: ${(t.total / 1000).toFixed(1)}s` : 'Gemini Vision has re-extracted the text from the original image.' }); },
                       onError: (err: Error) => { setReprocessingId(null); toast({ variant: 'destructive', title: 'Re-process Failed', description: err.message }); },
                     }
                   );
@@ -724,7 +726,7 @@ export default function AdminQuestionsPage() {
                   generateAnswer.mutate(
                     { id: question.id },
                     {
-                      onSuccess: () => toast({ title: 'Answer Generated', description: 'AI model answer has been generated successfully.' }),
+                      onSuccess: (data: any) => { const t = data?.timing; toast({ title: 'Answer Generated', description: t ? `AI: ${(t.aiProcessing / 1000).toFixed(1)}s · Save: ${(t.saveResults / 1000).toFixed(1)}s · Total: ${(t.total / 1000).toFixed(1)}s` : 'AI model answer has been generated successfully.' }); },
                       onError: (err: Error) => toast({ variant: 'destructive', title: 'Generation Failed', description: err.message }),
                     }
                   );
