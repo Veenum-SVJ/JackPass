@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +75,22 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
     explanation: question.explanation || '',
   });
   type MarksQ = { question: string; totalMarks: number; parts?: { label: string; marks: number; text?: string }[] };
+  const reprocessStartRef = useRef(0);
+  const [reprocessElapsed, setReprocessElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!isReprocessing) { setReprocessElapsed(0); return; }
+    const id = setInterval(() => setReprocessElapsed(Date.now() - reprocessStartRef.current), 1000);
+    return () => clearInterval(id);
+  }, [isReprocessing]);
+
+  // Reset timer when reprocess starts
+  useEffect(() => {
+    if (isReprocessing && reprocessStep === 'starting') {
+      reprocessStartRef.current = Date.now();
+    }
+  }, [isReprocessing, reprocessStep]);
+
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
 
@@ -290,11 +306,14 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
                       )} />
                       <span className="hidden sm:inline">{stepShortLabels[s]}</span>
                     </span>
-                  ))}
-                </div>
+                  ))}                </div>
+              )}
+              {isReprocessing && reprocessElapsed > 2000 && (
+                <p className="text-[10px] text-muted-foreground mt-1">~{Math.max(0, Math.ceil(17 - reprocessElapsed / 1000))}s remaining</p>
               )}
             </div>
           )}
+
           {onGenerateAnswer && (
             <Button
               variant="outline"
