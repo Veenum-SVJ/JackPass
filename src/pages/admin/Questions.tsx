@@ -173,11 +173,13 @@ export default function AdminQuestionsPage() {
     }
   };
 
-  const handleBulkGenerateAnswers = async () => {
+  const handleBulkGenerateAnswers = async (specificIds?: string[]) => {
     // Find questions that have content but no AI-generated answer
-    const candidates = questions.filter(q => q.full_content && !q.answer_generated);
+    const candidates = specificIds
+      ? questions.filter(q => specificIds.includes(q.id) && q.full_content)
+      : questions.filter(q => q.full_content && !q.answer_generated);
     if (candidates.length === 0) {
-      toast({ title: 'No questions to process', description: 'All questions with content already have AI-generated answers.' });
+      toast({ title: 'No questions to process', description: specificIds ? 'Selected questions have no content to generate answers from.' : 'All questions with content already have AI-generated answers.' });
       return;
     }
 
@@ -309,11 +311,18 @@ export default function AdminQuestionsPage() {
         handleExportCsv('selected');
         return;
       }
+
+      // Ctrl/Cmd+Shift+G → Generate answers for selected
+      if (e[mod] && e.shiftKey && e.key.toLowerCase() === 'g' && selectedIds.size > 0) {
+        e.preventDefault();
+        handleBulkGenerateAnswers(Array.from(selectedIds));
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIds, paginatedQuestions, toggleSelectAll, handleBulkAction, handleExportCsv]);
+  }, [selectedIds, paginatedQuestions, toggleSelectAll, handleBulkAction, handleExportCsv, handleBulkGenerateAnswers]);
 
   const allSelected = paginatedQuestions.length > 0 && selectedIds.size === paginatedQuestions.length;
   const someSelected = selectedIds.size > 0 && selectedIds.size < paginatedQuestions.length;
@@ -485,7 +494,7 @@ export default function AdminQuestionsPage() {
               variant="outline"
               size="sm"
               className="mt-2 border-blue-300 text-blue-800 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900"
-              onClick={handleBulkGenerateAnswers}
+              onClick={() => handleBulkGenerateAnswers()}
             >
               <Wand2 className="h-4 w-4 mr-2" />
               Generate All Answers ({questions.filter(q => q.full_content && !q.answer_generated).length})
@@ -594,6 +603,20 @@ export default function AdminQuestionsPage() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
+                  className="border-blue-300 text-blue-800 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-200"
+                  onClick={() => handleBulkGenerateAnswers(Array.from(selectedIds))}
+                  disabled={generateAnswer.isPending || !!bulkGenProgress}
+                >
+                  {generateAnswer.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4 mr-2" />
+                  )}
+                  Generate Answers ({selectedIds.size})
+                </Button>
+                <Button
+                  size="sm"
                   variant="ghost"
                   onClick={() => setSelectedIds(new Set())}
                 >
@@ -618,7 +641,10 @@ export default function AdminQuestionsPage() {
           )}
           <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+E</kbd> Export all</span>
           {selectedIds.size > 0 && (
-            <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+Shift+E</kbd> Export selected</span>
+            <>
+              <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+Shift+E</kbd> Export selected</span>
+              <span><kbd className="px-1.5 py-0.5 rounded border bg-muted text-[10px] font-mono">Ctrl+Shift+G</kbd> Generate answers</span>
+            </>
           )}
         </div>
       )}
