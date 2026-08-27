@@ -138,9 +138,10 @@ export function useReprocessQuestion() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
+    mutationFn: async ({ id, signal }: { id: string; signal?: AbortSignal }) => {
       return apiFetch<{ success: boolean; question: AdminQuestion; ocrConfidence: Record<string, number> }>(`/api/admin/questions/${id}/reprocess`, {
         method: 'POST',
+        signal,
       });
     },
     onSuccess: () => {
@@ -157,9 +158,10 @@ export function useGenerateAnswer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
+    mutationFn: async ({ id, signal }: { id: string; signal?: AbortSignal }) => {
       return apiFetch<{ success: boolean; question: AdminQuestion }>(`/api/admin/questions/${id}/generate-answer`, {
         method: 'POST',
+        signal,
       });
     },
     onSuccess: () => {
