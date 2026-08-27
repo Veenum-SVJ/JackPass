@@ -3,13 +3,15 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Loader2, FileText, Clock, CheckCircle, XCircle, CheckCheck, XSquare, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Search, Loader2, FileText, Clock, CheckCircle, XCircle, CheckCheck, XSquare, ChevronLeft, ChevronRight, Download, AlertTriangle, RefreshCw } from 'lucide-react';
 import { QuestionReviewCard } from '@/components/admin/QuestionReviewCard';
 import {
   useAdminQuestions,
   useAdminInstitutions,
   useModerateQuestion,
   useBulkModerateQuestion,
+  useUpdateQuestion,
+  useReprocessQuestion,
   type QuestionStatus,
 } from '@/hooks/useAdminQuestions';
 import { useToast } from '@/hooks/use-toast';
@@ -95,6 +97,8 @@ export default function AdminQuestionsPage() {
   const { data: institutions = [] } = useAdminInstitutions();
   const moderateQuestion = useModerateQuestion();
   const bulkModerate = useBulkModerateQuestion();
+  const updateQuestion = useUpdateQuestion();
+  const reprocessQuestion = useReprocessQuestion();
 
   // Debounce the search input
   useEffect(() => {
@@ -301,6 +305,33 @@ export default function AdminQuestionsPage() {
         </div>
       </section>
 
+      {/* Mock OCR Warning Banner */}
+      {!isLoading && questions.some(q => q.content_preview?.startsWith('[MOCK OCR]') || q.full_content?.startsWith('[MOCK OCR]')) && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
+          <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold">Mock OCR Detected — Placeholder Content</p>
+            <p className="text-xs mt-1">Some exam papers on this page contain fake placeholder text because the OCR engine was unavailable when they were uploaded. These papers need to be re-processed with Gemini Vision to get accurate text extraction. Use the "Re-process" button on each affected card, or click below to re-process all at once.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 border-amber-400 text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900"
+              onClick={() => {
+                const mockIds = questions.filter(q => q.content_preview?.startsWith('[MOCK OCR]') || q.full_content?.startsWith('[MOCK OCR]')).map(q => q.id);
+                mockIds.forEach(id => {
+                  reprocessQuestion.mutate({ id });
+                });
+                toast({ title: 'Re-processing Started', description: `Re-processing ${mockIds.length} exam paper(s) with Gemini Vision...` });
+              }}
+              disabled={reprocessQuestion.isPending}
+            >
+              <RefreshCw className={cn('h-4 w-4 mr-2', reprocessQuestion.isPending && 'animate-spin')} />
+              Re-process All Mock OCR Papers ({questions.filter(q => q.content_preview?.startsWith('[MOCK OCR]') || q.full_content?.startsWith('[MOCK OCR]')).length})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
@@ -470,6 +501,25 @@ export default function AdminQuestionsPage() {
                 question={question}
                 onApprove={() => handleStatusChange(question.id, 'approve')}
                 onReject={() => handleStatusChange(question.id, 'reject')}
+                onSave={(updates) => {
+                  updateQuestion.mutate(
+                    { id: question.id, updates },
+                    {
+                      onSuccess: () => toast({ title: 'Exam Paper Updated', description: 'Changes saved successfully.' }),
+                      onError: (err: Error) => toast({ variant: 'destructive', title: 'Update Failed', description: err.message }),
+                    }
+                  );
+                }}
+                onReprocess={() => {
+                  reprocessQuestion.mutate(
+                    { id: question.id },
+                    {
+                      onSuccess: () => toast({ title: 'OCR Re-processed', description: 'Gemini Vision has re-extracted the text from the original image.' }),
+                      onError: (err: Error) => toast({ variant: 'destructive', title: 'Re-process Failed', description: err.message }),
+                    }
+                  );
+                }}
+                isReprocessing={reprocessQuestion.isPending}
                 selected={selectedIds.has(question.id)}
                 onSelect={(selected) => {
                   if (selected) {

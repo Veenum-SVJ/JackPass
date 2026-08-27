@@ -56,8 +56,8 @@ export default function Library() {
     });
   }, [allQuestions, appliedFilters, searchQuery]);
 
-  // Get institutions that have questions
-  const institutionsWithQuestions = useMemo(() => {
+  // Get institutions that have exam papers
+  const institutionsWithExamPapers = useMemo(() => {
     if (!allQuestions) return [];
     const counts = new Map<string, number>();
     allQuestions.forEach((q) => {
@@ -67,9 +67,9 @@ export default function Library() {
       .filter((inst) => counts.has(inst.name))
       .map((inst) => ({
         ...inst,
-        questionCount: counts.get(inst.name) || 0,
+        examPaperCount: counts.get(inst.name) || 0,
       }))
-      .sort((a, b) => b.questionCount - a.questionCount);
+      .sort((a, b) => b.examPaperCount - a.examPaperCount);
   }, [allQuestions]);
 
   // Get unique courses
@@ -140,7 +140,7 @@ export default function Library() {
             Library
           </h2>
           <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-            Explore our collection of past questions from institutions across Nigeria. Search by course, browse by institution, or filter by year and semester.
+            Explore our collection of past exam papers from institutions across Nigeria. Search by course, browse by institution, or filter by year and semester.
           </p>
         </div>
       </section>
@@ -158,7 +158,7 @@ export default function Library() {
                 <BookOpen className="h-4 w-4" />
               </div>
               <span className="font-semibold">{stats.total.toLocaleString()}</span>
-              <span className="text-muted-foreground">Questions</span>
+              <span className="text-muted-foreground">Exam Papers</span>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <div className="bg-primary/10 text-primary p-2 rounded-full">
@@ -207,9 +207,9 @@ export default function Library() {
                 <SelectValue placeholder="Institution" />
               </SelectTrigger>
               <SelectContent>
-                {institutionsWithQuestions.map((inst) => (
+                {institutionsWithExamPapers.map((inst) => (
                   <SelectItem key={inst.name} value={inst.name}>
-                    {inst.name} ({inst.questionCount})
+                    {inst.name} ({inst.examPaperCount})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -302,7 +302,7 @@ export default function Library() {
         <section className="px-4">
           <h3 className="text-2xl font-bold mb-2 font-headline">Browse by Institution</h3>
           <p className="text-muted-foreground text-sm mb-6">
-            Select an institution to see all available past questions.
+            Select an institution to see all available past exam papers.
           </p>
 
           {isLoading ? (
@@ -313,7 +313,7 @@ export default function Library() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {institutionsWithQuestions.map((inst) => (
+              {institutionsWithExamPapers.map((inst) => (
                 <Card
                   key={inst.name}
                   className="cursor-pointer hover:border-primary hover:bg-card/80 transition-all group"
@@ -329,7 +329,7 @@ export default function Library() {
                           {inst.name}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {inst.questionCount} question{inst.questionCount !== 1 ? 's' : ''}
+                          {inst.examPaperCount} exam paper{inst.examPaperCount !== 1 ? 's' : ''}
                         </p>
                       </div>
                     </div>
@@ -340,16 +340,16 @@ export default function Library() {
             </div>
           )}
 
-          {institutionsWithQuestions.length === 0 && !isLoading && (
+          {institutionsWithExamPapers.length === 0 && !isLoading && (
             <Card className="relative overflow-hidden">
               <div aria-hidden className="absolute inset-0 bg-adire text-primary/5" />
               <CardContent className="relative py-12 flex flex-col items-center justify-center text-center">
                 <div className="bg-primary/10 text-primary p-3 rounded-full mb-4">
                   <Building2 className="h-6 w-6" />
                 </div>
-                <CardTitle className="text-xl font-headline">No Questions Yet</CardTitle>
+                <CardTitle className="text-xl font-headline">No Exam Papers Yet</CardTitle>
                 <CardDescription className="mt-2 max-w-md">
-                  No institutions have questions in the library yet. Be the first to upload a past question!
+                  No institutions have exam papers in the library yet. Be the first to upload a past exam paper!
                 </CardDescription>
               </CardContent>
             </Card>
@@ -366,7 +366,7 @@ export default function Library() {
                 {appliedFilters.institution ? appliedFilters.institution : 'Search Results'}
               </h3>
               <p className="text-muted-foreground text-sm mt-1">
-                {filteredQuestions.length} question{filteredQuestions.length !== 1 ? 's' : ''} found
+                {filteredQuestions.length} exam paper{filteredQuestions.length !== 1 ? 's' : ''} found
               </p>
             </div>
             {hasActiveFilters && (
@@ -404,9 +404,9 @@ export default function Library() {
                 <div className="bg-primary/10 text-primary p-3 rounded-full mb-4">
                   <SearchX className="h-6 w-6" />
                 </div>
-                <CardTitle className="text-2xl font-headline">No Questions Found</CardTitle>
+                <CardTitle className="text-2xl font-headline">No Exam Papers Found</CardTitle>
                 <CardDescription className="mt-2 max-w-md">
-                  No questions match your filters. Try adjusting your search criteria or browse a different institution.
+                  No exam papers match your filters. Try adjusting your search criteria or browse a different institution.
                 </CardDescription>
                 <Button variant="outline" className="mt-4" onClick={handleClearFilters}>
                   Clear Filters

@@ -61,6 +61,158 @@ var init_genkit = __esm({
   }
 });
 
+// src/lib/ocr.ts
+var ocr_exports = {};
+__export(ocr_exports, {
+  extractTextFromBase64: () => extractTextFromBase64,
+  extractTextFromFile: () => extractTextFromFile
+});
+async function mockExtractTextFromFile(file) {
+  await new Promise((resolve) => setTimeout(resolve, 1e3));
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  let mockText = "";
+  if (ext === "pdf") {
+    mockText = `[MOCK OCR] Extracted text from PDF: ${file.name}
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures and Algorithms
+2023/2024 Academic Session
+First Semester Examination
+
+Instruction: Answer ALL questions
+
+Question 1 (20 marks)
+(a) Define a binary search tree and explain its properties.
+(b) Write an algorithm to insert a node into a BST.
+(c) What is the time complexity of search operation in a BST?
+
+Question 2 (20 marks)
+(a) Explain the difference between BFS and DFS traversal.
+(b) Apply DFS to the following graph starting from vertex A.
+(c) What are the applications of BFS in real-world scenarios?`;
+  } else if (ext === "jpg" || ext === "jpeg" || ext === "png") {
+    mockText = `[MOCK OCR] Extracted text from image: ${file.name}
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures
+2023 First Semester
+
+Question 1: What is a binary search tree?
+Question 2: Explain BFS vs DFS`;
+  } else {
+    mockText = `Unsupported file type for OCR: ${ext}. Please upload PDF or image files.`;
+  }
+  return {
+    text: mockText,
+    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
+  };
+}
+async function fileToBase64(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  return buffer.toString("base64");
+}
+async function geminiExtractText(file, base64, mimeType) {
+  console.log(`Attempting Gemini Vision OCR for: ${file.name} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
+  const startTime = Date.now();
+  const { output } = await ai.generate({
+    prompt: [
+      {
+        text: `Extract ALL text from this academic exam paper image. Read every word carefully and transcribe it exactly as it appears.
+
+Rules:
+- Transcribe text faithfully \u2014 do not guess, fabricate, or summarize
+- Preserve the original formatting and structure (headings, numbered questions, sub-questions)
+- Include ALL visible text: institution name, course details, instructions, questions, and any other content
+- For Nigerian universities, recognize common abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, UNN, OOU, etc.
+- Course codes typically follow patterns like CSC/MTH/PHY/CHM/STA + 3 digits
+- If text is unclear or partially visible, include what you can read and note uncertainty
+
+Return ONLY the extracted text, nothing else.`
+      },
+      {
+        media: {
+          url: `data:${mimeType};base64,${base64}`
+        }
+      }
+    ]
+  });
+  const elapsed = Date.now() - startTime;
+  console.log(`Gemini Vision OCR completed in ${elapsed}ms`);
+  const extractedText = typeof output === "string" ? output : JSON.stringify(output);
+  if (!extractedText || extractedText.trim().length < 10) {
+    throw new Error("Gemini Vision returned empty or very short text");
+  }
+  console.log(`Gemini Vision extracted ${extractedText.length} characters`);
+  return {
+    text: extractedText,
+    confidence: {
+      overall: 0.95,
+      institution: 0.92,
+      course: 0.9,
+      year: 0.93,
+      semester: 0.91,
+      type: 0.88
+    }
+  };
+}
+async function extractTextFromBase64(base64, mimeType) {
+  const isPDF = mimeType === "application/pdf";
+  try {
+    console.log(`Attempting Gemini Vision OCR for base64 data (${mimeType})`);
+    const buffer = Buffer.from(base64, "base64");
+    const blob = new Blob([buffer], { type: mimeType });
+    const tempFile = new File([blob], `scan.${isPDF ? "pdf" : "jpg"}`, { type: mimeType });
+    const result = await geminiExtractText(tempFile, base64, mimeType);
+    console.log(`Gemini Vision OCR successful (${result.text.length} chars)`);
+    return result;
+  } catch (error) {
+    console.warn(`Gemini Vision OCR failed for base64 data, falling back to mock:`, error instanceof Error ? error.message : error);
+  }
+  console.log(`Using mock OCR for base64 data (${mimeType})`);
+  const mockText = isPDF ? `[MOCK OCR] Extracted text from PDF
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures and Algorithms
+2023/2024 Academic Session
+First Semester Examination` : `[MOCK OCR] Extracted text from image
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures
+2023 First Semester
+
+Question 1: What is a binary search tree?
+Question 2: Explain BFS vs DFS`;
+  return {
+    text: mockText,
+    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
+  };
+}
+async function extractTextFromFile(file) {
+  try {
+    console.log(`Starting Gemini Vision OCR for: ${file.name}`);
+    const base64 = await fileToBase64(file);
+    const mimeType = file.type || "application/octet-stream";
+    const result = await geminiExtractText(file, base64, mimeType);
+    console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
+    return result;
+  } catch (error) {
+    console.warn(`Gemini Vision OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
+  }
+  console.log(`Using mock OCR for: ${file.name}`);
+  return mockExtractTextFromFile(file);
+}
+var init_ocr = __esm({
+  "src/lib/ocr.ts"() {
+    "use strict";
+    init_genkit();
+  }
+});
+
 // src/ai/flows/extract-question-metadata.ts
 import { z } from "zod";
 var ExtractQuestionMetadataInputSchema, QuestionMetadataSchema, extractQuestionMetadataFlow;
@@ -617,6 +769,121 @@ adminRouter.get("/", requireAdmin, async (req, res) => {
     res.status(500).json({ error: "Failed to fetch questions" });
   }
 });
+adminRouter.post("/bulk/:action", requireAdmin, async (req, res) => {
+  const action = String(req.params.action);
+  const user = res.locals.user;
+  try {
+    if (!["approve", "reject"].includes(action)) {
+      res.status(400).json({ error: 'Invalid action. Use "approve" or "reject"' });
+      return;
+    }
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: "ids must be a non-empty array" });
+      return;
+    }
+    const supabase = createServerSupabase();
+    const newStatus = action === "approve" ? "approved" : "rejected";
+    const { data, error } = await supabase.from("questions").update({
+      status: newStatus,
+      approved_at: (/* @__PURE__ */ new Date()).toISOString(),
+      approved_by: user.id,
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    }).in("id", ids).select();
+    if (error) throw error;
+    res.json({
+      success: true,
+      count: data?.length ?? 0,
+      message: `${data?.length ?? 0} exam paper(s) ${action}d successfully`
+    });
+  } catch (error) {
+    console.error(`Error bulk ${action}ing questions:`, error);
+    res.status(500).json({ error: error.message || `Failed to bulk ${action} questions` });
+  }
+});
+adminRouter.put("/:id", requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    const supabase = createServerSupabase();
+    const allowedFields = ["title", "institution", "course", "course_code", "year", "semester", "type", "content_preview", "full_content", "answer", "explanation"];
+    const updates = { updated_at: (/* @__PURE__ */ new Date()).toISOString() };
+    for (const field of allowedFields) {
+      if (req.body[field] !== void 0) {
+        updates[field] = req.body[field];
+      }
+    }
+    if (Object.keys(updates).length <= 1) {
+      res.status(400).json({ error: "No valid fields to update" });
+      return;
+    }
+    const { data, error } = await supabase.from("questions").update(updates).eq("id", id).select().single();
+    if (error) throw error;
+    if (!data) {
+      res.status(404).json({ error: "Exam paper not found" });
+      return;
+    }
+    res.json({ success: true, question: data, message: "Exam paper updated successfully" });
+  } catch (error) {
+    console.error("Error updating exam paper:", error);
+    res.status(500).json({ error: error.message || "Failed to update exam paper" });
+  }
+});
+adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    const supabase = createServerSupabase();
+    const { data: question, error: fetchError } = await supabase.from("questions").select("id, file_url, file_name").eq("id", id).single();
+    if (fetchError || !question) {
+      res.status(404).json({ error: "Exam paper not found" });
+      return;
+    }
+    if (!question.file_url) {
+      res.status(400).json({ error: "No file URL available for re-processing" });
+      return;
+    }
+    await supabase.from("questions").update({ status: "processing", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
+    const { extractTextFromBase64: extractTextFromBase642 } = await Promise.resolve().then(() => (init_ocr(), ocr_exports));
+    const { processUploadedQuestionFlow: processUploadedQuestionFlow2 } = await Promise.resolve().then(() => (init_process_uploaded_question(), process_uploaded_question_exports));
+    const fetch2 = (await import("node-fetch")).default;
+    const response = await fetch2(question.file_url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch file: ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const base64 = buffer.toString("base64");
+    const mimeType = response.headers.get("content-type") || "application/octet-stream";
+    console.log(`Re-processing OCR for question ${id} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
+    const { text: ocrText, confidence: ocrConfidence } = await extractTextFromBase642(base64, mimeType);
+    console.log(`OCR re-processing completed: ${ocrText.length} chars extracted`);
+    const result = await processUploadedQuestionFlow2({
+      uploadId: id,
+      ocrText,
+      filename: question.file_name || "reprocessed.pdf",
+      uploaderId: "admin-reprocess"
+    });
+    if (!result.success) {
+      throw new Error(result.error || "AI extraction failed during re-processing");
+    }
+    const { data: updatedQuestion, error: updateError } = await supabase.from("questions").select("*").eq("id", id).single();
+    if (updateError) throw updateError;
+    res.json({
+      success: true,
+      question: updatedQuestion,
+      message: "Exam paper re-processed successfully",
+      ocrConfidence
+    });
+  } catch (error) {
+    console.error("Error re-processing exam paper:", error);
+    try {
+      const supabaseClient = createServerSupabase();
+      await supabaseClient.from("questions").update({ status: "pending", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
+    } catch (resetError) {
+      console.error("Failed to reset question status:", resetError);
+    }
+    res.status(500).json({ error: error.message || "Failed to re-process exam paper" });
+  }
+});
 adminRouter.post("/:id/:action", requireAdmin, async (req, res) => {
   const id = String(req.params.id);
   const action = String(req.params.action);
@@ -725,111 +992,7 @@ import multer from "multer";
 
 // src/lib/upload.ts
 init_supabase_server();
-
-// src/lib/ocr.ts
-async function mockExtractTextFromFile(file) {
-  await new Promise((resolve) => setTimeout(resolve, 1e3));
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  let mockText = "";
-  if (ext === "pdf") {
-    mockText = `[MOCK OCR] Extracted text from PDF: ${file.name}
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures and Algorithms
-2023/2024 Academic Session
-First Semester Examination
-
-Instruction: Answer ALL questions
-
-Question 1 (20 marks)
-(a) Define a binary search tree and explain its properties.
-(b) Write an algorithm to insert a node into a BST.
-(c) What is the time complexity of search operation in a BST?
-
-Question 2 (20 marks)
-(a) Explain the difference between BFS and DFS traversal.
-(b) Apply DFS to the following graph starting from vertex A.
-(c) What are the applications of BFS in real-world scenarios?`;
-  } else if (ext === "jpg" || ext === "jpeg" || ext === "png") {
-    mockText = `[MOCK OCR] Extracted text from image: ${file.name}
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures
-2023 First Semester
-
-Question 1: What is a binary search tree?
-Question 2: Explain BFS vs DFS`;
-  } else {
-    mockText = `Unsupported file type for OCR: ${ext}. Please upload PDF or image files.`;
-  }
-  return {
-    text: mockText,
-    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
-  };
-}
-async function fileToBase64(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return buffer.toString("base64");
-}
-async function hfExtractTextFromBase64(base64) {
-  const hfToken = process.env.HF_TOKEN;
-  if (!hfToken) throw new Error("HF_TOKEN not set");
-  const apiUrl = "https://api-inference.huggingface.co/models/baidu/Unlimited-OCR";
-  const binaryData = Buffer.from(base64, "base64");
-  const response = await fetch(apiUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${hfToken}`,
-      "Content-Type": "application/octet-stream"
-    },
-    body: binaryData
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`HF API error (${response.status}): ${errorText}`);
-  }
-  const result = await response.json();
-  const extractedText = parseOCRResponse(result);
-  if (!extractedText || extractedText.trim().length < 10) {
-    throw new Error("OCR returned empty or very short text");
-  }
-  return {
-    text: extractedText,
-    confidence: { overall: 0.9, institution: 0.85, course: 0.85, year: 0.9, semester: 0.9, type: 0.85 }
-  };
-}
-function parseOCRResponse(result) {
-  if (typeof result === "string") return result;
-  if (Array.isArray(result)) return result.join("\n\n");
-  if (result?.generated_text) return result.generated_text;
-  if (result?.[0]?.generated_text) return result[0].generated_text;
-  try {
-    return JSON.stringify(result);
-  } catch {
-    return "Failed to parse OCR response";
-  }
-}
-async function extractTextFromFile(file) {
-  const hfToken = process.env.HF_TOKEN;
-  if (hfToken) {
-    try {
-      console.log(`Attempting Baidu Unlimited-OCR for: ${file.name}`);
-      const base64 = await fileToBase64(file);
-      const result = await hfExtractTextFromBase64(base64);
-      console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
-      return result;
-    } catch (error) {
-      console.warn(`HF OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
-    }
-  }
-  console.log(`Using mock OCR for: ${file.name}`);
-  return mockExtractTextFromFile(file);
-}
-
-// src/lib/upload.ts
+init_ocr();
 init_process_uploaded_question();
 import { v4 as uuidv42 } from "uuid";
 async function processLinkImport(fileUrl, uploaderId, _metadata = {}) {

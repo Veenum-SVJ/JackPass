@@ -68,8 +68,7 @@ Fill in the values:
 - `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` — Supabase project URL + anon key (client-side)
 - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service role key (server-side, never ship to the client)
 - `PAYSTACK_PUBLIC_KEY` / `PAYSTACK_SECRET_KEY` — Paystack credentials
-- `GOOGLE_AI_API_KEY` — Google AI key for Genkit flows
-- `HF_TOKEN` — optional; enables real Hugging Face OCR (falls back to mock OCR in dev)
+- `GOOGLE_AI_API_KEY` — Google AI key for Genkit flows (powers Gemini Vision OCR for document scanning)
 - `NEXT_PUBLIC_APP_URL` — your public URL, used for the Paystack callback
 
 > **Note on env names:** the Vite client only sees `VITE_*` vars; the Express server reads the
@@ -258,7 +257,7 @@ The Express server serves both the API and the built SPA (with client-side routi
 
 ## 🔒 Security Notes
 
-- `SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY`, `GOOGLE_AI_API_KEY`, and `HF_TOKEN` are
+- `SUPABASE_SERVICE_ROLE_KEY`, `PAYSTACK_SECRET_KEY`, and `GOOGLE_AI_API_KEY` are
   **server-only** — they are never referenced by client code and never enter the Vite bundle.
 - Paystack webhooks are verified with an HMAC-SHA512 signature over the raw request body.
 - All admin mutations re-check `is_admin` server-side (not just the client guard).
