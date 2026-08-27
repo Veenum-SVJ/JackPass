@@ -91,6 +91,7 @@ export default function AdminQuestionsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [bulkGenProgress, setBulkGenProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [bulkReprocessProgress, setBulkReprocessProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const { data: reprocessStatus } = useReprocessStatus(reprocessingId, !!reprocessingId);
 
@@ -352,18 +353,51 @@ export default function AdminQuestionsPage() {
               variant="outline"
               size="sm"
               className="mt-2 border-amber-400 text-amber-800 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-200 dark:hover:bg-amber-900"
-              onClick={() => {
-                const mockIds = questions.filter(q => q.content_preview?.startsWith('[MOCK OCR]') || q.full_content?.startsWith('[MOCK OCR]')).map(q => q.id);
-                mockIds.forEach(id => {
-                  reprocessQuestion.mutate({ id });
-                });
-                toast({ title: 'Re-processing Started', description: `Re-processing ${mockIds.length} exam paper(s) with Gemini Vision...` });
+              onClick={async () => {
+                const mockQuestions = questions.filter(q => q.content_preview?.startsWith('[MOCK OCR]') || q.full_content?.startsWith('[MOCK OCR]'));
+                const total = mockQuestions.length;
+                if (total === 0) return;
+                setBulkReprocessProgress({ done: 0, total, current: '' });
+                let done = 0;
+                let failed = 0;
+                for (const q of mockQuestions) {
+                  setBulkReprocessProgress({ done, total, current: q.title });
+                  try {
+                    await reprocessQuestion.mutateAsync({ id: q.id });
+                    done++;
+                  } catch (err) {
+                    console.error(`Failed to reprocess ${q.id}:`, err);
+                    failed++;
+                  }
+                }
+                setBulkReprocessProgress(null);
+                toast({ title: 'Re-process Complete', description: `${done} paper(s) re-processed${failed > 0 ? `, ${failed} failed` : ''}.` });
               }}
-              disabled={reprocessQuestion.isPending}
+              disabled={reprocessQuestion.isPending || !!bulkReprocessProgress}
             >
               <RefreshCw className={cn('h-4 w-4 mr-2', reprocessQuestion.isPending && 'animate-spin')} />
               Re-process All Mock OCR Papers ({questions.filter(q => q.content_preview?.startsWith('[MOCK OCR]') || q.full_content?.startsWith('[MOCK OCR]')).length})
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Re-process Progress */}
+      {bulkReprocessProgress && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
+          <RefreshCw className="h-5 w-5 mt-0.5 flex-shrink-0 animate-spin" />
+          <div className="flex-1">
+            <p className="font-semibold">Re-processing with Gemini Vision... ({bulkReprocessProgress.done}/{bulkReprocessProgress.total})</p>
+            {bulkReprocessProgress.current && (
+              <p className="text-xs mt-1">Currently processing: {bulkReprocessProgress.current}</p>
+            )}
+            <div className="mt-2 w-full bg-amber-200 dark:bg-amber-800 rounded-full h-2">
+              <div
+                className="bg-amber-600 dark:bg-amber-400 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(bulkReprocessProgress.done / bulkReprocessProgress.total) * 100}%` }}
+              />
+            </div>
+            <p className="text-xs mt-1 opacity-70">Each paper takes ~15-20 seconds. Do not close this page.</p>
           </div>
         </div>
       )}
