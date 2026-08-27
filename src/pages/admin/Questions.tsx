@@ -94,6 +94,33 @@ export default function AdminQuestionsPage() {
   const [bulkReprocessProgress, setBulkReprocessProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const bulkGenCancelled = useRef(false);
   const bulkReprocessCancelled = useRef(false);
+  const bulkGenStartRef = useRef(0);
+  const bulkReprocessStartRef = useRef(0);
+  const [bulkGenElapsed, setBulkGenElapsed] = useState(0);
+  const [bulkReprocessElapsed, setBulkReprocessElapsed] = useState(0);
+
+  // Elapsed timers for both bulk operations
+  useEffect(() => {
+    if (!bulkGenProgress) { setBulkGenElapsed(0); return; }
+    const id = setInterval(() => setBulkGenElapsed(Date.now() - bulkGenStartRef.current), 1000);
+    return () => clearInterval(id);
+  }, [bulkGenProgress]);
+  useEffect(() => {
+    if (!bulkReprocessProgress) { setBulkReprocessElapsed(0); return; }
+    const id = setInterval(() => setBulkReprocessElapsed(Date.now() - bulkReprocessStartRef.current), 1000);
+    return () => clearInterval(id);
+  }, [bulkReprocessProgress]);
+
+  const formatEta = (elapsedMs: number, done: number, total: number) => {
+    if (done === 0) return 'Calculating...';
+    const remaining = total - done;
+    const avgPerItem = elapsedMs / done;
+    const etaSec = Math.ceil((remaining * avgPerItem) / 1000);
+    if (etaSec < 60) return `~${etaSec}s remaining`;
+    const min = Math.floor(etaSec / 60);
+    const sec = etaSec % 60;
+    return `~${min}m ${sec}s remaining`;
+  };
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const { data: reprocessStatus } = useReprocessStatus(reprocessingId, !!reprocessingId);
 
@@ -155,6 +182,7 @@ export default function AdminQuestionsPage() {
     }
 
     bulkGenCancelled.current = false;
+    bulkGenStartRef.current = Date.now();
     setBulkGenProgress({ done: 0, total: candidates.length, current: '' });
     let done = 0;
     let failed = 0;
@@ -365,6 +393,7 @@ export default function AdminQuestionsPage() {
                 const total = mockQuestions.length;
                 if (total === 0) return;
                 bulkReprocessCancelled.current = false;
+                bulkReprocessStartRef.current = Date.now();
                 setBulkReprocessProgress({ done: 0, total, current: '' });
                 let done = 0;
                 let failed = 0;
@@ -409,7 +438,7 @@ export default function AdminQuestionsPage() {
                 style={{ width: `${(bulkReprocessProgress.done / bulkReprocessProgress.total) * 100}%` }}
               />
             </div>
-            <p className="text-xs mt-1 opacity-70">Each paper takes ~15-20 seconds. Do not close this page.</p>
+            <p className="text-xs mt-1 opacity-70">{formatEta(bulkReprocessElapsed, bulkReprocessProgress.done, bulkReprocessProgress.total)} · Do not close this page.</p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => { bulkReprocessCancelled.current = true; setBulkReprocessProgress(null); }} className="text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 shrink-0">
             Cancel
@@ -432,6 +461,7 @@ export default function AdminQuestionsPage() {
                 style={{ width: `${(bulkGenProgress.done / bulkGenProgress.total) * 100}%` }}
               />
             </div>
+            <p className="text-xs mt-1 opacity-70">{formatEta(bulkGenElapsed, bulkGenProgress.done, bulkGenProgress.total)}</p>
           </div>
           <Button
             variant="ghost"
