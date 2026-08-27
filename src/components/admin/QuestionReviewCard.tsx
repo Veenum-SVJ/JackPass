@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Check, X, FileText, ChevronLeft, ChevronRight, Edit3, Save, Eye, RefreshCw, AlertTriangle, Maximize2, Wand2, BookOpen } from 'lucide-react';
+import { Check, X, FileText, ChevronLeft, ChevronRight, Edit3, Save, Eye, RefreshCw, AlertTriangle, Maximize2, Wand2, BookOpen, GripVertical } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -75,6 +75,31 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
     explanation: question.explanation || '',
   });
   type MarksQ = { question: string; totalMarks: number; parts?: { label: string; marks: number; text?: string }[] };
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dropIdx, setDropIdx] = useState<number | null>(null);
+
+  const reorderMarksScheme = (from: number, to: number) => {
+    if (from === to) return;
+    const updated = [...editMarksScheme];
+    const [moved] = updated.splice(from, 1);
+    updated.splice(to, 0, moved!);
+    setEditMarksScheme(updated);
+  };
+
+  const [dragPartIdx, setDragPartIdx] = useState<{ qi: number; pi: number } | null>(null);
+  const [dropPartIdx, setDropPartIdx] = useState<{ qi: number; pi: number } | null>(null);
+
+  const reorderParts = (qi: number, from: number, to: number) => {
+    if (from === to) return;
+    const updated = [...editMarksScheme];
+    const q = updated[qi]!;
+    const newParts = [...(q.parts || [])];
+    const [moved] = newParts.splice(from, 1);
+    newParts.splice(to, 0, moved!);
+    updated[qi] = { question: q.question, totalMarks: q.totalMarks, parts: newParts };
+    setEditMarksScheme(updated);
+  };
+
   const [editMarksScheme, setEditMarksScheme] = useState<MarksQ[]>(() => {
     try {
       const ms = question.marks_scheme;
@@ -606,8 +631,18 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
               ) : (
                 <div className="space-y-3">
                   {editMarksScheme.map((q, qi) => (
-                    <div key={qi} className="border rounded-lg p-3 bg-muted/30">
+                    <div
+                      key={qi}
+                      className={cn('border rounded-lg p-3 bg-muted/30 transition-colors', dropIdx === qi && 'border-primary bg-primary/5')}
+                      draggable
+                      onDragStart={(e) => { setDragIdx(qi); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropIdx(qi); }}
+                      onDragLeave={() => setDropIdx(null)}
+                      onDrop={(e) => { e.preventDefault(); setDropIdx(null); if (dragIdx !== null) reorderMarksScheme(dragIdx, qi); setDragIdx(null); }}
+                      onDragEnd={() => { setDragIdx(null); setDropIdx(null); }}
+                    >
                       <div className="flex items-center gap-2 mb-2">
+                        <GripVertical className="h-4 w-4 text-muted-foreground/50 cursor-grab active:cursor-grabbing shrink-0" />
                         <span className="text-xs font-semibold">Q{qi + 1}.</span>
                         <Input
                           value={q.question}
@@ -641,7 +676,17 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
                       {/* Parts */}
                       <div className="ml-6 space-y-1">
                         {(q.parts || []).map((p, pi) => (
-                          <div key={pi} className="flex items-center gap-1">
+                          <div
+                            key={pi}
+                            className={cn('flex items-center gap-1 transition-colors', dropPartIdx?.qi === qi && dropPartIdx?.pi === pi && 'bg-primary/10 rounded')}
+                            draggable
+                            onDragStart={(e) => { e.stopPropagation(); setDragPartIdx({ qi, pi }); e.dataTransfer.effectAllowed = 'move'; }}
+                            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDropPartIdx({ qi, pi }); }}
+                            onDragLeave={() => setDropPartIdx(null)}
+                            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDropPartIdx(null); if (dragPartIdx?.qi === qi && dragPartIdx !== null) reorderParts(qi, dragPartIdx.pi, pi); setDragPartIdx(null); }}
+                            onDragEnd={() => { setDragPartIdx(null); setDropPartIdx(null); }}
+                          >
+                            <GripVertical className="h-3 w-3 text-muted-foreground/40 cursor-grab active:cursor-grabbing shrink-0" />
                             <Input
                               value={p.label}
                               onChange={(e) => {
