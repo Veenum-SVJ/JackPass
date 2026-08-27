@@ -22,3 +22,7 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# Next.js build output
+.next/
+next-env.d.ts
