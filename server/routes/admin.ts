@@ -221,7 +221,7 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
     // Fetch the question to get file_url
     const { data: question, error: fetchError } = await supabase
       .from('questions')
-      .select('id, file_url, file_name')
+      .select('id, file_url, file_name, uploader_id')
       .eq('id', id)
       .single();
 
@@ -241,9 +241,9 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       .update({ status: 'processing', updated_at: new Date().toISOString() })
       .eq('id', id);
 
-    // Import and run Gemini Vision OCR
+    // Import OCR and AI extraction (direct — NOT the full flow)
     const { extractTextFromBase64 } = await import('../../src/lib/ocr');
-    const { processUploadedQuestionFlow } = await import('../../src/ai/flows/process-uploaded-question');
+    const { extractQuestionMetadataFlow } = await import('../../src/ai/flows/extract-question-metadata');
 
     // Fetch the file and convert to base64
     const fetch = (await import('node-fetch')).default;
@@ -263,26 +263,72 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
 
     console.log(`OCR re-processing completed: ${ocrText.length} chars extracted`);
 
-    // Run AI metadata extraction with the new OCR text
-    const result = await processUploadedQuestionFlow({
-      uploadId: id,
+    // Run AI metadata extraction on the fresh OCR text
+    const metadata = await extractQuestionMetadataFlow({
       ocrText,
       filename: question.file_name || 'reprocessed.pdf',
-      uploaderId: 'admin-reprocess',
+      uploaderId: question.uploader_id || 'admin-reprocess',
     });
 
-    if (!result.success) {
-      throw new Error(result.error || 'AI extraction failed during re-processing');
+    console.log(`AI extraction completed for question ${id}:`, {
+      title: metadata.title,
+      institution: metadata.institution,
+      course: metadata.course,
+    });
+
+    // Parse year for DB compatibility
+    const rawYear = metadata.year || '';
+    const yearMatch = String(rawYear).match(/(\d{4})/);
+    const yearSession = yearMatch ? rawYear : String(new Date().getFullYear());
+    const yearStart = yearMatch ? yearMatch[1] : String(new Date().getFullYear());
+
+    // Build update payload — UPDATE the existing question in-place
+    const updates: Record<string, unknown> = {
+      title: metadata.title,
+      institution: metadata.institution,
+      course: metadata.course,
+      faculty: metadata.faculty,
+      department: metadata.department,
+      year: yearSession,
+      semester: metadata.semester,
+      type: metadata.type || 'Mixed',
+      content_preview: metadata.contentPreview,
+      full_content: metadata.fullContent,
+      answer: metadata.answer,
+      explanation: metadata.explanation,
+      ai_extracted_data: metadata,
+      status: 'pending',
+      updated_at: new Date().toISOString(),
+    };
+
+    let { error: updateError } = await supabase
+      .from('questions')
+      .update(updates)
+      .eq('id', id);
+
+    // If year format fails (column is integer), retry with starting year
+    if (updateError && yearSession !== yearStart) {
+      console.log(`Year format '${yearSession}' failed, retrying with '${yearStart}'`);
+      updates.year = yearStart;
+      const retry = await supabase
+        .from('questions')
+        .update(updates)
+        .eq('id', id);
+      updateError = retry.error;
     }
 
-    // Fetch the updated question
-    const { data: updatedQuestion, error: updateError } = await supabase
+    if (updateError) {
+      throw new Error(`Failed to update question: ${updateError.message}`);
+    }
+
+    // Fetch the updated question to return
+    const { data: updatedQuestion, error: fetchUpdatedError } = await supabase
       .from('questions')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (updateError) throw updateError;
+    if (fetchUpdatedError) throw fetchUpdatedError;
 
     res.json({
       success: true,

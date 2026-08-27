@@ -214,6 +214,10 @@ var init_ocr = __esm({
 });
 
 // src/ai/flows/extract-question-metadata.ts
+var extract_question_metadata_exports = {};
+__export(extract_question_metadata_exports, {
+  extractQuestionMetadataFlow: () => extractQuestionMetadataFlow
+});
 import { z } from "zod";
 var ExtractQuestionMetadataInputSchema, QuestionMetadataSchema, extractQuestionMetadataFlow;
 var init_extract_question_metadata = __esm({
@@ -832,7 +836,7 @@ adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
   const id = String(req.params.id);
   try {
     const supabase = createServerSupabase();
-    const { data: question, error: fetchError } = await supabase.from("questions").select("id, file_url, file_name").eq("id", id).single();
+    const { data: question, error: fetchError } = await supabase.from("questions").select("id, file_url, file_name, uploader_id").eq("id", id).single();
     if (fetchError || !question) {
       res.status(404).json({ error: "Exam paper not found" });
       return;
@@ -843,7 +847,7 @@ adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
     }
     await supabase.from("questions").update({ status: "processing", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
     const { extractTextFromBase64: extractTextFromBase642 } = await Promise.resolve().then(() => (init_ocr(), ocr_exports));
-    const { processUploadedQuestionFlow: processUploadedQuestionFlow2 } = await Promise.resolve().then(() => (init_process_uploaded_question(), process_uploaded_question_exports));
+    const { extractQuestionMetadataFlow: extractQuestionMetadataFlow2 } = await Promise.resolve().then(() => (init_extract_question_metadata(), extract_question_metadata_exports));
     const fetch2 = (await import("node-fetch")).default;
     const response = await fetch2(question.file_url);
     if (!response.ok) {
@@ -856,17 +860,49 @@ adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
     console.log(`Re-processing OCR for question ${id} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
     const { text: ocrText, confidence: ocrConfidence } = await extractTextFromBase642(base64, mimeType);
     console.log(`OCR re-processing completed: ${ocrText.length} chars extracted`);
-    const result = await processUploadedQuestionFlow2({
-      uploadId: id,
+    const metadata = await extractQuestionMetadataFlow2({
       ocrText,
       filename: question.file_name || "reprocessed.pdf",
-      uploaderId: "admin-reprocess"
+      uploaderId: question.uploader_id || "admin-reprocess"
     });
-    if (!result.success) {
-      throw new Error(result.error || "AI extraction failed during re-processing");
+    console.log(`AI extraction completed for question ${id}:`, {
+      title: metadata.title,
+      institution: metadata.institution,
+      course: metadata.course
+    });
+    const rawYear = metadata.year || "";
+    const yearMatch = String(rawYear).match(/(\d{4})/);
+    const yearSession = yearMatch ? rawYear : String((/* @__PURE__ */ new Date()).getFullYear());
+    const yearStart = yearMatch ? yearMatch[1] : String((/* @__PURE__ */ new Date()).getFullYear());
+    const updates = {
+      title: metadata.title,
+      institution: metadata.institution,
+      course: metadata.course,
+      faculty: metadata.faculty,
+      department: metadata.department,
+      year: yearSession,
+      semester: metadata.semester,
+      type: metadata.type || "Mixed",
+      content_preview: metadata.contentPreview,
+      full_content: metadata.fullContent,
+      answer: metadata.answer,
+      explanation: metadata.explanation,
+      ai_extracted_data: metadata,
+      status: "pending",
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    let { error: updateError } = await supabase.from("questions").update(updates).eq("id", id);
+    if (updateError && yearSession !== yearStart) {
+      console.log(`Year format '${yearSession}' failed, retrying with '${yearStart}'`);
+      updates.year = yearStart;
+      const retry = await supabase.from("questions").update(updates).eq("id", id);
+      updateError = retry.error;
     }
-    const { data: updatedQuestion, error: updateError } = await supabase.from("questions").select("*").eq("id", id).single();
-    if (updateError) throw updateError;
+    if (updateError) {
+      throw new Error(`Failed to update question: ${updateError.message}`);
+    }
+    const { data: updatedQuestion, error: fetchUpdatedError } = await supabase.from("questions").select("*").eq("id", id).single();
+    if (fetchUpdatedError) throw fetchUpdatedError;
     res.json({
       success: true,
       question: updatedQuestion,
