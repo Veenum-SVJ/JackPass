@@ -168,3 +168,24 @@ export function useGenerateAnswer() {
     },
   });
 }
+
+export type ReprocessStep = 'idle' | 'starting' | 'fetching_file' | 'ai_processing' | 'processing_results' | 'complete' | 'unknown';
+
+/**
+ * Poll reprocess status for a question (used by progress indicator).
+ */
+export function useReprocessStatus(id: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['reprocess-status', id],
+    queryFn: async (): Promise<{ step: ReprocessStep; status: string }> => {
+      return apiFetch(`/api/admin/questions/${id}/reprocess-status`);
+    },
+    enabled: enabled && !!id,
+    refetchInterval: (query) => {
+      // Stop polling when complete or on error
+      const step = query.state.data?.step;
+      if (step === 'complete' || step === 'idle' || step === 'unknown') return false;
+      return 1000; // Poll every 1 second
+    },
+  });
+}

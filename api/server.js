@@ -752,6 +752,21 @@ adminRouter.put("/:id", requireAdmin, async (req, res) => {
     res.status(500).json({ error: error.message || "Failed to update exam paper" });
   }
 });
+adminRouter.get("/:id/reprocess-status", requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("questions").select("status, ai_extracted_data").eq("id", id).single();
+    if (error || !data) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const step = data.ai_extracted_data?.reprocess_step || (data.status === "pending" ? "idle" : "unknown");
+    res.json({ step, status: data.status });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
   const id = String(req.params.id);
   try {
@@ -765,9 +780,13 @@ adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
       res.status(400).json({ error: "No file URL available for re-processing" });
       return;
     }
-    await supabase.from("questions").update({ status: "processing", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
+    const updateStep = async (step) => {
+      await supabase.from("questions").update({ ai_extracted_data: { reprocess_step: step } }).eq("id", id);
+    };
+    await supabase.from("questions").update({ status: "processing", updated_at: (/* @__PURE__ */ new Date()).toISOString(), ai_extracted_data: { reprocess_step: "starting" } }).eq("id", id);
     const { ai: ai2 } = await Promise.resolve().then(() => (init_genkit(), genkit_exports));
     const { z: z5 } = await import("zod");
+    await updateStep("fetching_file");
     const fetch2 = (await import("node-fetch")).default;
     const response = await fetch2(question.file_url);
     if (!response.ok) {
@@ -799,6 +818,7 @@ adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
       })).optional().describe("Marks allocation from exam paper"),
       answerGenerated: z5.string().optional().describe("AI-generated model answer")
     });
+    await updateStep("ai_processing");
     const startTime = Date.now();
     const { output } = await ai2.generate({
       prompt: [
@@ -846,6 +866,8 @@ Return structured JSON with all fields.`
     });
     const elapsed = Date.now() - startTime;
     console.log(`Single Gemini call completed in ${elapsed}ms`);
+    await updateStep("processing_results");
+    await updateStep("processing_results");
     if (!output) {
       throw new Error("Gemini returned no output \u2014 the image may be unreadable");
     }
@@ -890,6 +912,7 @@ Return structured JSON with all fields.`
     if (updateError) {
       throw new Error(`Failed to update question: ${updateError.message}`);
     }
+    await updateStep("complete");
     const { data: updatedQuestion, error: fetchUpdatedError } = await supabase.from("questions").select("*").eq("id", id).single();
     if (fetchUpdatedError) throw fetchUpdatedError;
     res.json({

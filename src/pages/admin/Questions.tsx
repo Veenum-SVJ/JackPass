@@ -13,6 +13,7 @@ import {
   useUpdateQuestion,
   useReprocessQuestion,
   useGenerateAnswer,
+  useReprocessStatus,
   type QuestionStatus,
 } from '@/hooks/useAdminQuestions';
 import { useToast } from '@/hooks/use-toast';
@@ -90,6 +91,8 @@ export default function AdminQuestionsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [bulkGenProgress, setBulkGenProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null);
+  const { data: reprocessStatus } = useReprocessStatus(reprocessingId, !!reprocessingId);
 
   const { data: questions = [], isLoading } = useAdminQuestions({
     search: debouncedSearch,
@@ -591,15 +594,17 @@ export default function AdminQuestionsPage() {
                   );
                 }}
                 onReprocess={() => {
+                  setReprocessingId(question.id);
                   reprocessQuestion.mutate(
                     { id: question.id },
                     {
-                      onSuccess: () => toast({ title: 'OCR Re-processed', description: 'Gemini Vision has re-extracted the text from the original image.' }),
-                      onError: (err: Error) => toast({ variant: 'destructive', title: 'Re-process Failed', description: err.message }),
+                      onSuccess: () => { setReprocessingId(null); toast({ title: 'OCR Re-processed', description: 'Gemini Vision has re-extracted the text from the original image.' }); },
+                      onError: (err: Error) => { setReprocessingId(null); toast({ variant: 'destructive', title: 'Re-process Failed', description: err.message }); },
                     }
                   );
                 }}
-                isReprocessing={reprocessQuestion.isPending}
+                isReprocessing={reprocessQuestion.isPending && reprocessingId === question.id}
+                reprocessStep={reprocessingId === question.id ? reprocessStatus?.step : undefined}
                 onGenerateAnswer={() => {
                   generateAnswer.mutate(
                     { id: question.id },

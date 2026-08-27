@@ -212,6 +212,27 @@ adminRouter.put('/:id', requireAdmin, async (req, res) => {
  * POST /api/admin/questions/:id/:action
  * Approve or reject a question.
  */
+/**
+ * GET /api/admin/questions/:id/reprocess-status
+ * Poll reprocess step progress (used by frontend progress indicator).
+ */
+adminRouter.get('/:id/reprocess-status', requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from('questions')
+      .select('status, ai_extracted_data')
+      .eq('id', id)
+      .single();
+    if (error || !data) { res.status(404).json({ error: 'Not found' }); return; }
+    const step = (data.ai_extracted_data as any)?.reprocess_step || (data.status === 'pending' ? 'idle' : 'unknown');
+    res.json({ step, status: data.status });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
   const id = String(req.params.id);
 
@@ -235,10 +256,18 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       return;
     }
 
+    // Helper to update reprocess step for polling
+    const updateStep = async (step: string) => {
+      await supabase
+        .from('questions')
+        .update({ ai_extracted_data: { reprocess_step: step } })
+        .eq('id', id);
+    };
+
     // Update status to processing
     await supabase
       .from('questions')
-      .update({ status: 'processing', updated_at: new Date().toISOString() })
+      .update({ status: 'processing', updated_at: new Date().toISOString(), ai_extracted_data: { reprocess_step: 'starting' } })
       .eq('id', id);
 
     // Import genkit AI for a SINGLE combined OCR + metadata extraction call
@@ -246,7 +275,8 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
     const { ai } = await import('../../src/ai/genkit');
     const { z } = await import('zod');
 
-    // Fetch the file and convert to base64
+    // Step 1: Fetch file
+    await updateStep('fetching_file');
     const fetch = (await import('node-fetch')).default;
     const response = await fetch(question.file_url);
     if (!response.ok) {
@@ -282,6 +312,8 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       answerGenerated: z.string().optional().describe('AI-generated model answer'),
     });
 
+    // Step 2: Running Gemini Vision OCR + extraction
+    await updateStep('ai_processing');
     const startTime = Date.now();
     const { output } = await ai.generate({
       prompt: [
@@ -300,6 +332,10 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
 
     const elapsed = Date.now() - startTime;
     console.log(`Single Gemini call completed in ${elapsed}ms`);
+    // Step 3: Processing results
+    await updateStep('processing_results');
+    // Step 3: Processing results
+    await updateStep('processing_results');
 
     if (!output) {
       throw new Error('Gemini returned no output — the image may be unreadable');
@@ -361,6 +397,9 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
     if (updateError) {
       throw new Error(`Failed to update question: ${updateError.message}`);
     }
+
+    // Step 4: Complete
+    await updateStep('complete');
 
     // Fetch the updated question to return
     const { data: updatedQuestion, error: fetchUpdatedError } = await supabase

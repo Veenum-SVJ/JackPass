@@ -50,13 +50,14 @@ interface QuestionReviewCardProps {
   onSave?: (updates: Record<string, unknown>) => void;
   onReprocess?: () => void;
   isReprocessing?: boolean;
+  reprocessStep?: string;
   onGenerateAnswer?: () => void;
   isGeneratingAnswer?: boolean;
   selected?: boolean;
   onSelect?: (selected: boolean) => void;
 }
 
-export function QuestionReviewCard({ question, onApprove, onReject, onSave, onReprocess, isReprocessing, onGenerateAnswer, isGeneratingAnswer, selected, onSelect }: QuestionReviewCardProps) {
+export function QuestionReviewCard({ question, onApprove, onReject, onSave, onReprocess, isReprocessing, reprocessStep, onGenerateAnswer, isGeneratingAnswer, selected, onSelect }: QuestionReviewCardProps) {
   const [currentPage, setCurrentPage] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [isFullScreenEdit, setIsFullScreenEdit] = useState(false);
@@ -91,6 +92,21 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
     rejected: 'bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-300',
   };
 
+  const stepLabels: Record<string, string> = {
+    starting: 'Starting...',
+    fetching_file: 'Fetching file...',
+    ai_processing: 'AI extracting text & metadata...',
+    processing_results: 'Saving results...',
+    complete: 'Complete!',
+  };
+  const stepShortLabels: Record<string, string> = {
+    starting: 'Start',
+    fetching_file: 'Fetch',
+    ai_processing: 'AI',
+    processing_results: 'Save',
+    complete: 'Done',
+  };
+  const stepOrder = ['starting', 'fetching_file', 'ai_processing', 'processing_results', 'complete'];
   const typeColors = {
     Objective: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-400/15 dark:text-indigo-300',
     Theory: 'bg-violet-100 text-violet-800 dark:bg-violet-400/15 dark:text-violet-300',
@@ -227,16 +243,32 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
             </div>
           )}
           {onReprocess && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReprocess}
-              disabled={isReprocessing}
-              title="Re-run OCR on the original image"
-            >
-              <RefreshCw className={cn('h-4 w-4 mr-1', isReprocessing && 'animate-spin')} />
-              {isReprocessing ? 'Processing...' : 'Re-process'}
-            </Button>
+            <div className="flex flex-col gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onReprocess}
+                disabled={isReprocessing}
+                title="Re-run OCR on the original image"
+              >
+                <RefreshCw className={cn('h-4 w-4 mr-1', isReprocessing && 'animate-spin')} />
+                {isReprocessing ? (reprocessStep ? stepLabels[reprocessStep] || 'Processing...' : 'Processing...') : 'Re-process'}
+              </Button>
+              {isReprocessing && reprocessStep && reprocessStep !== 'complete' && (
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  {stepOrder.map((s, i) => (
+                    <span key={s} className={cn('flex items-center gap-0.5', reprocessStep === s && 'text-primary font-medium')}>                      {i > 0 && <span className="text-muted-foreground/40">→</span>}
+                      <span className={cn(
+                        'w-1.5 h-1.5 rounded-full',
+                        stepOrder.indexOf(reprocessStep) > i ? 'bg-emerald-500' :
+                        reprocessStep === s ? 'bg-primary animate-pulse' : 'bg-muted-foreground/20'
+                      )} />
+                      <span className="hidden sm:inline">{stepShortLabels[s]}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           {onGenerateAnswer && (
             <Button
