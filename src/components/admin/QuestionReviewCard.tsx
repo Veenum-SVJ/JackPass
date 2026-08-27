@@ -1,10 +1,10 @@
-'use client';
-
+import { useState } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Check, X, FileText } from 'lucide-react';
+import { Check, X, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -40,9 +40,12 @@ interface QuestionReviewCardProps {
   };
   onApprove: () => void;
   onReject: () => void;
+  selected?: boolean;
+  onSelect?: (selected: boolean) => void;
 }
 
-export function QuestionReviewCard({ question, onApprove, onReject }: QuestionReviewCardProps) {
+export function QuestionReviewCard({ question, onApprove, onReject, selected, onSelect }: QuestionReviewCardProps) {
+  const [currentPage, setCurrentPage] = useState(0);
   const statusColors = {
     pending: 'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300',
     approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300',
@@ -56,11 +59,21 @@ export function QuestionReviewCard({ question, onApprove, onReject }: QuestionRe
   };
 
   const confidence = question.ai_extracted_data?.confidence;
+  const pages = question.ai_extracted_data?.pages || [];
+  const hasPages = pages.length > 0;
 
   return (
-    <Card className="flex flex-col">
+    <Card className={cn('flex flex-col transition-all', selected && 'ring-2 ring-primary')}>
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-3">
+          {onSelect && (
+            <Checkbox
+              checked={selected}
+              onCheckedChange={(checked) => onSelect(!!checked)}
+              className='mt-1'
+            />
+          )}
+          <div className="flex items-start justify-between gap-2 flex-1">
           <div className="flex-1 min-w-0">
             <CardTitle className="text-lg font-semibold truncate">{question.title}</CardTitle>
             <div className="flex flex-wrap gap-2 mt-2">
@@ -93,6 +106,7 @@ export function QuestionReviewCard({ question, onApprove, onReject }: QuestionRe
               </div>
             </div>
           )}
+          </div>
         </div>
       </CardHeader>
 
@@ -104,12 +118,70 @@ export function QuestionReviewCard({ question, onApprove, onReject }: QuestionRe
             <span>{question.course_code ? `${question.course_code} — ` : ''}{question.course}</span>
           </div>
 
-          <div>
-            <p className="text-muted-foreground text-xs mb-1">Content Preview</p>
-            <p className="line-clamp-3 bg-muted/50 p-3 rounded text-sm">
-              {question.content_preview || question.full_content?.slice(0, 300) + '...'}
-            </p>
-          </div>
+          {/* Page Preview */}
+          {hasPages && (
+            <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-muted-foreground text-xs">
+                  Exam Paper Preview ({currentPage + 1} of {pages.length})
+                </p>
+                {pages.length > 1 && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                      disabled={currentPage === 0}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => setCurrentPage(Math.min(pages.length - 1, currentPage + 1))}
+                      disabled={currentPage === pages.length - 1}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div className="relative bg-muted rounded-lg overflow-hidden border">
+                <img
+                  src={pages[currentPage]?.url}
+                  alt={`Page ${currentPage + 1} of exam paper`}
+                  className="w-full h-auto object-contain max-h-[300px]"
+                  loading="lazy"
+                />
+              </div>
+              {pages.length > 1 && (
+                <div className="flex gap-1 mt-2 justify-center">
+                  {pages.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentPage(idx)}
+                      className={cn(
+                        'w-2 h-2 rounded-full transition-colors',
+                        idx === currentPage ? 'bg-primary' : 'bg-muted-foreground/30'
+                      )}
+                      aria-label={`Go to page ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!hasPages && (
+            <div>
+              <p className="text-muted-foreground text-xs mb-1">Content Preview</p>
+              <p className="line-clamp-3 bg-muted/50 p-3 rounded text-sm">
+                {question.content_preview || question.full_content?.slice(0, 300) + '...'}
+              </p>
+            </div>
+          )}
 
           {question.answer && (
             <div>
@@ -130,27 +202,6 @@ export function QuestionReviewCard({ question, onApprove, onReject }: QuestionRe
           )}
 
           <Separator />
-
-          {/* Multi-page thumbnails */}
-          {question.ai_extracted_data?.pages && question.ai_extracted_data.pages.length > 1 && (
-            <div>
-              <p className="text-muted-foreground text-xs mb-2">Pages ({question.ai_extracted_data.pages.length} total)</p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {question.ai_extracted_data.pages.map((page) => (
-                  <a
-                    key={page.page}
-                    href={page.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-shrink-0 flex items-center gap-1 px-2 py-1 text-xs rounded border border-border hover:bg-muted transition-colors"
-                  >
-                    <FileText className="h-3 w-3" />
-                    Page {page.page}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Uploaded: {format(new Date(question.created_at), 'MMM d, yyyy HH:mm')}</span>

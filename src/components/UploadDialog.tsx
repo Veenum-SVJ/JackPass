@@ -220,7 +220,7 @@ export function UploadDialog() {
       toast({
         variant: 'destructive',
         title: 'Not Logged In',
-        description: 'You must be logged in to upload questions. Please log in first.',
+        description: 'You must be logged in to upload exam papers. Please log in first.',
       });
       return;
     }      if (!data.institution || !data.course || !data.courseCode || !data.year || !data.semester) {
@@ -236,7 +236,7 @@ export function UploadDialog() {
       toast({
         variant: 'destructive',
         title: 'No Content Provided',
-        description: 'Please either upload files or provide a link to the question paper.',
+        description: 'Please either upload files or provide a link to the exam paper.',
       });
       return;
     }
@@ -246,7 +246,7 @@ export function UploadDialog() {
     if (fileCount > 1) {
       toast({
         title: `Processing ${fileCount} pages...`,
-        description: 'All pages will be grouped as a single question paper with shared metadata.',
+        description: 'All pages will be grouped as a single exam paper with shared metadata.',
       });
     }
 
@@ -268,8 +268,8 @@ export function UploadDialog() {
           <span className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
             {fileCount > 1
-              ? `${fileCount}-page question paper submitted for review. All pages share the same metadata.`
-              : 'Your question paper has been submitted for review.'}
+              ? `${fileCount}-page exam paper submitted for review. All pages share the same metadata.`
+              : 'Your exam paper has been submitted for review.'}
           </span>
         ),
       });
@@ -310,7 +310,7 @@ export function UploadDialog() {
       toast({
         variant: "destructive",
         title: "Authentication Required",
-        description: "Please log in to upload a question.",
+        description: "Please log in to upload an exam paper.",
       });
       navigate('/login');
     } else {
@@ -323,14 +323,14 @@ export function UploadDialog() {
       <DialogTrigger asChild>
         <Button size="lg" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleTriggerClick}>
           <UploadCloud className="mr-2 h-5 w-5" />
-          Upload Past Question
+          Upload Exam Paper
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Upload Past Question(s)</DialogTitle>
+          <DialogTitle>Upload Exam Paper</DialogTitle>
           <DialogDescription>
-            Contribute to the community by uploading new question papers.
+            Contribute to the community by uploading new exam papers.
           </DialogDescription>
         </DialogHeader>
 
@@ -381,7 +381,7 @@ export function UploadDialog() {
                           <h4 className="text-sm font-medium">Selected Files ({selectedFiles.length} page{selectedFiles.length > 1 ? 's' : ''}):</h4>
                           {selectedFiles.length > 1 && (
                             <p className="text-xs text-muted-foreground">
-                              All pages will be grouped as a single question paper.
+                              All pages will be grouped as a single exam paper.
                             </p>
                           )}
                           <div className="space-y-2">

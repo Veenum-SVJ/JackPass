@@ -4,7 +4,7 @@ import { useAdminStats } from '@/hooks/useAdminStats';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Shield, FileQuestion, Clock, CheckCircle, XCircle, Users, ArrowRight } from 'lucide-react';
+import { Shield, FileText, Clock, CheckCircle, XCircle, Users, ArrowRight } from 'lucide-react';
 
 export default function AdminDashboardPage() {
   const { isAdmin, loading: authLoading } = useAuth();
@@ -50,7 +50,7 @@ export default function AdminDashboardPage() {
             Welcome Back
           </h1>
           <p className="text-muted-foreground mt-2 max-w-xl">
-            Manage questions, review submissions, and keep the platform running smoothly.
+            Manage exam papers, review submissions, and keep the platform running smoothly.
           </p>
         </div>
       </section>
@@ -77,9 +77,9 @@ export default function AdminDashboardPage() {
                 <div aria-hidden className="absolute inset-0 bg-adire text-primary/5" />
                 <CardHeader className="flex flex-row items-center justify-between pb-2 relative">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total Questions
+                    Total Exam Papers
                   </CardTitle>
-                  <FileQuestion className="h-4 w-4 text-muted-foreground" />
+                  <FileText className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent className="relative">
                   <div className="text-3xl font-bold font-headline">{stats?.total ?? 0}</div>
@@ -145,12 +145,12 @@ export default function AdminDashboardPage() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="bg-primary/10 text-primary p-2 rounded-lg">
-                      <FileQuestion className="h-5 w-5" />
+                      <FileText className="h-5 w-5" />
                     </div>
-                    <h3 className="text-lg font-semibold font-headline">Question Moderation</h3>
+                    <h3 className="text-lg font-semibold font-headline">Exam Paper Moderation</h3>
                   </div>
                   <p className="text-muted-foreground text-sm">
-                    Review and approve pending questions submitted by students.
+                    Review and approve pending exam papers submitted by students.
                   </p>
                   {stats && stats.pending > 0 && (
                     <Badge variant="secondary" className="text-xs">
