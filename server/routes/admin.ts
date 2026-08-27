@@ -241,9 +241,10 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       .update({ status: 'processing', updated_at: new Date().toISOString() })
       .eq('id', id);
 
-    // Import OCR and AI extraction (direct — NOT the full flow)
-    const { extractTextFromBase64 } = await import('../../src/lib/ocr');
-    const { extractQuestionMetadataFlow } = await import('../../src/ai/flows/extract-question-metadata');
+    // Import genkit AI for a SINGLE combined OCR + metadata extraction call
+    // (two sequential Gemini calls take 30s+ and hit Vercel timeout)
+    const { ai } = await import('../../src/ai/genkit');
+    const { z } = await import('zod');
 
     // Fetch the file and convert to base64
     const fetch = (await import('node-fetch')).default;
@@ -256,47 +257,79 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
     const base64 = buffer.toString('base64');
     const mimeType = response.headers.get('content-type') || 'application/octet-stream';
 
-    console.log(`Re-processing OCR for question ${id} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
+    console.log(`Re-processing question ${id} with single Gemini call (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
 
-    // Run Gemini Vision OCR
-    const { text: ocrText, confidence: ocrConfidence } = await extractTextFromBase64(base64, mimeType);
-
-    console.log(`OCR re-processing completed: ${ocrText.length} chars extracted`);
-
-    // Run AI metadata extraction on the fresh OCR text
-    const metadata = await extractQuestionMetadataFlow({
-      ocrText,
-      filename: question.file_name || 'reprocessed.pdf',
-      uploaderId: question.uploader_id || 'admin-reprocess',
+    // Single Gemini call: extract text AND structured metadata from the image
+    const CombinedResultSchema = z.object({
+      extractedText: z.string().describe('Full raw text extracted from the image'),
+      title: z.string().describe('Short descriptive title (max 100 chars)'),
+      institution: z.string().describe('University/institution name'),
+      course: z.string().describe('Course code and name'),
+      faculty: z.string().optional().describe('Faculty/School'),
+      department: z.string().optional().describe('Department'),
+      year: z.string().describe('Academic year range (e.g. 2025/2026)'),
+      semester: z.enum(['First', 'Second']).describe('Semester'),
+      type: z.enum(['Objective', 'Theory', 'Mixed']).describe('Question type'),
+      contentPreview: z.string().describe('First 200-300 chars of question content'),
+      fullContent: z.string().describe('Complete question text as extracted'),
+      answer: z.string().optional().describe('Model answer if present'),
+      explanation: z.string().optional().describe('Explanation or marking scheme'),
     });
 
-    console.log(`AI extraction completed for question ${id}:`, {
-      title: metadata.title,
-      institution: metadata.institution,
-      course: metadata.course,
+    const startTime = Date.now();
+    const { output } = await ai.generate({
+      prompt: [
+        {
+          text: `You are an expert at reading academic exam papers from Nigerian universities.\n\nExtract ALL text from this exam paper image and simultaneously extract structured metadata.\n\nRules for text extraction:\n- Transcribe text faithfully — do not guess or fabricate\n- Preserve formatting and structure (headings, numbered questions, sub-questions)\n- Include ALL visible text: institution name, course details, instructions, questions\n\nRules for metadata extraction:\n- institution: The university name\n- course: Course code and name (e.g. \"CSC 301 - Data Structures\")\n- year: Academic year range (e.g. \"2025/2026\"). Convert single years to ranges.\n- semester: \"First\" or \"Second\"\n- type: \"Objective\" (MCQ), \"Theory\" (essay), or \"Mixed\"\n- contentPreview: First 200-300 chars of actual question content\n- fullContent: Complete question text\n\nReturn structured JSON with all fields.`,
+        },
+        {
+          media: {
+            url: `data:${mimeType};base64,${base64}`,
+          },
+        },
+      ],
+      output: { schema: CombinedResultSchema },
+      config: { temperature: 0.1 },
     });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`Single Gemini call completed in ${elapsed}ms`);
+
+    if (!output) {
+      throw new Error('Gemini returned no output — the image may be unreadable');
+    }
+
+    const ocrText = output.extractedText;
+    if (!ocrText || ocrText.trim().length < 10) {
+      throw new Error('Gemini extracted very little text from the image');
+    }
+
+    console.log(`Extracted ${ocrText.length} chars, metadata: ${output.title}`);
 
     // Parse year for DB compatibility
-    const rawYear = metadata.year || '';
+    const rawYear = output.year || '';
     const yearMatch = String(rawYear).match(/(\d{4})/);
     const yearSession = yearMatch ? rawYear : String(new Date().getFullYear());
     const yearStart = yearMatch ? yearMatch[1] : String(new Date().getFullYear());
 
     // Build update payload — UPDATE the existing question in-place
     const updates: Record<string, unknown> = {
-      title: metadata.title,
-      institution: metadata.institution,
-      course: metadata.course,
-      faculty: metadata.faculty,
-      department: metadata.department,
+      title: output.title,
+      institution: output.institution,
+      course: output.course,
+      faculty: output.faculty,
+      department: output.department,
       year: yearSession,
-      semester: metadata.semester,
-      type: metadata.type || 'Mixed',
-      content_preview: metadata.contentPreview,
-      full_content: metadata.fullContent,
-      answer: metadata.answer,
-      explanation: metadata.explanation,
-      ai_extracted_data: metadata,
+      semester: output.semester,
+      type: output.type || 'Mixed',
+      content_preview: output.contentPreview,
+      full_content: output.fullContent,
+      answer: output.answer,
+      explanation: output.explanation,
+      ai_extracted_data: {
+        confidence: { overall: 0.95, institution: 0.92, course: 0.90, year: 0.93, semester: 0.91, type: 0.88 },
+        extractedText: ocrText,
+      },
       status: 'pending',
       updated_at: new Date().toISOString(),
     };
@@ -334,7 +367,7 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       success: true,
       question: updatedQuestion,
       message: 'Exam paper re-processed successfully',
-      ocrConfidence,
+      ocrConfidence: { overall: 0.95 },
     });
   } catch (error: any) {
     console.error('Error re-processing exam paper:', error);

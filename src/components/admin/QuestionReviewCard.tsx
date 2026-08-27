@@ -150,8 +150,7 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
               className='mt-1'
             />
           )}
-          <div className="flex items-start justify-between gap-2 flex-1">
-            <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0">
               {isEditing ? (
                 <Input
                   value={editData.title}
@@ -192,50 +191,50 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
               )}
             </div>
           </div>
-            <div className="flex items-start gap-2">
-              {confidence?.overall && (
-                <div className="text-right">
-                  <div className="text-xs text-muted-foreground">AI Confidence</div>
-                  <div className={cn(
-                    'font-mono font-semibold',
-                    confidence.overall > 0.8 ? 'text-green-600' :
-                    confidence.overall > 0.6 ? 'text-yellow-600' : 'text-red-600'
-                  )}>
-                    {Math.round(confidence.overall * 100)}%
-                  </div>
-                </div>
-              )}
-              {onReprocess && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onReprocess}
-                  disabled={isReprocessing}
-                  title="Re-run OCR on the original image"
-                >
-                  <RefreshCw className={cn('h-4 w-4 mr-1', isReprocessing && 'animate-spin')} />
-                  {isReprocessing ? 'Processing...' : 'Re-process'}
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openFullScreenEdit}
-                title="Open full-screen editor"
-              >
-                <Maximize2 className="h-4 w-4 mr-1" />
-                Full Screen
-              </Button>
-              <Button
-                variant={isEditing ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => isEditing ? handleCancel() : setIsEditing(true)}
-              >
-                {isEditing ? <X className="h-4 w-4 mr-1" /> : <Edit3 className="h-4 w-4 mr-1" />}
-                {isEditing ? 'Cancel' : 'Edit'}
-              </Button>
+        </div>
+        {/* Action buttons row — inside card, below title/badges */}
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          {confidence?.overall && (
+            <div className="text-xs text-muted-foreground mr-auto">
+              AI Confidence{' '}
+              <span className={cn(
+                'font-mono font-semibold',
+                confidence.overall > 0.8 ? 'text-green-600' :
+                confidence.overall > 0.6 ? 'text-yellow-600' : 'text-red-600'
+              )}>
+                {Math.round(confidence.overall * 100)}%
+              </span>
             </div>
-          </div>
+          )}
+          {onReprocess && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReprocess}
+              disabled={isReprocessing}
+              title="Re-run OCR on the original image"
+            >
+              <RefreshCw className={cn('h-4 w-4 mr-1', isReprocessing && 'animate-spin')} />
+              {isReprocessing ? 'Processing...' : 'Re-process'}
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openFullScreenEdit}
+            title="Open full-screen editor"
+          >
+            <Maximize2 className="h-4 w-4 mr-1" />
+            Full Screen
+          </Button>
+          <Button
+            variant={isEditing ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => isEditing ? handleCancel() : setIsEditing(true)}
+          >
+            {isEditing ? <X className="h-4 w-4 mr-1" /> : <Edit3 className="h-4 w-4 mr-1" />}
+            {isEditing ? 'Cancel' : 'Edit'}
+          </Button>
         </div>
       </CardHeader>
 

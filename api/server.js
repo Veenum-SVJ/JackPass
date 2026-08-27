@@ -44,6 +44,10 @@ var init_supabase_server = __esm({
 });
 
 // src/ai/genkit.ts
+var genkit_exports = {};
+__export(genkit_exports, {
+  ai: () => ai
+});
 import { genkit } from "genkit";
 import { googleAI } from "@genkit-ai/googleai";
 var ai;
@@ -61,163 +65,7 @@ var init_genkit = __esm({
   }
 });
 
-// src/lib/ocr.ts
-var ocr_exports = {};
-__export(ocr_exports, {
-  extractTextFromBase64: () => extractTextFromBase64,
-  extractTextFromFile: () => extractTextFromFile
-});
-async function mockExtractTextFromFile(file) {
-  await new Promise((resolve) => setTimeout(resolve, 1e3));
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  let mockText = "";
-  if (ext === "pdf") {
-    mockText = `[MOCK OCR] Extracted text from PDF: ${file.name}
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures and Algorithms
-2023/2024 Academic Session
-First Semester Examination
-
-Instruction: Answer ALL questions
-
-Question 1 (20 marks)
-(a) Define a binary search tree and explain its properties.
-(b) Write an algorithm to insert a node into a BST.
-(c) What is the time complexity of search operation in a BST?
-
-Question 2 (20 marks)
-(a) Explain the difference between BFS and DFS traversal.
-(b) Apply DFS to the following graph starting from vertex A.
-(c) What are the applications of BFS in real-world scenarios?`;
-  } else if (ext === "jpg" || ext === "jpeg" || ext === "png") {
-    mockText = `[MOCK OCR] Extracted text from image: ${file.name}
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures
-2023 First Semester
-
-Question 1: What is a binary search tree?
-Question 2: Explain BFS vs DFS`;
-  } else {
-    mockText = `Unsupported file type for OCR: ${ext}. Please upload PDF or image files.`;
-  }
-  return {
-    text: mockText,
-    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
-  };
-}
-async function fileToBase64(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return buffer.toString("base64");
-}
-async function geminiExtractText(file, base64, mimeType) {
-  console.log(`Attempting Gemini Vision OCR for: ${file.name} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
-  const startTime = Date.now();
-  const { output } = await ai.generate({
-    prompt: [
-      {
-        text: `Extract ALL text from this academic exam paper image. Read every word carefully and transcribe it exactly as it appears.
-
-Rules:
-- Transcribe text faithfully \u2014 do not guess, fabricate, or summarize
-- Preserve the original formatting and structure (headings, numbered questions, sub-questions)
-- Include ALL visible text: institution name, course details, instructions, questions, and any other content
-- For Nigerian universities, recognize common abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, UNN, OOU, etc.
-- Course codes typically follow patterns like CSC/MTH/PHY/CHM/STA + 3 digits
-- If text is unclear or partially visible, include what you can read and note uncertainty
-
-Return ONLY the extracted text, nothing else.`
-      },
-      {
-        media: {
-          url: `data:${mimeType};base64,${base64}`
-        }
-      }
-    ]
-  });
-  const elapsed = Date.now() - startTime;
-  console.log(`Gemini Vision OCR completed in ${elapsed}ms`);
-  const extractedText = typeof output === "string" ? output : JSON.stringify(output);
-  if (!extractedText || extractedText.trim().length < 10) {
-    throw new Error("Gemini Vision returned empty or very short text");
-  }
-  console.log(`Gemini Vision extracted ${extractedText.length} characters`);
-  return {
-    text: extractedText,
-    confidence: {
-      overall: 0.95,
-      institution: 0.92,
-      course: 0.9,
-      year: 0.93,
-      semester: 0.91,
-      type: 0.88
-    }
-  };
-}
-async function extractTextFromBase64(base64, mimeType) {
-  const isPDF = mimeType === "application/pdf";
-  try {
-    console.log(`Attempting Gemini Vision OCR for base64 data (${mimeType})`);
-    const buffer = Buffer.from(base64, "base64");
-    const blob = new Blob([buffer], { type: mimeType });
-    const tempFile = new File([blob], `scan.${isPDF ? "pdf" : "jpg"}`, { type: mimeType });
-    const result = await geminiExtractText(tempFile, base64, mimeType);
-    console.log(`Gemini Vision OCR successful (${result.text.length} chars)`);
-    return result;
-  } catch (error) {
-    console.warn(`Gemini Vision OCR failed for base64 data, falling back to mock:`, error instanceof Error ? error.message : error);
-  }
-  console.log(`Using mock OCR for base64 data (${mimeType})`);
-  const mockText = isPDF ? `[MOCK OCR] Extracted text from PDF
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures and Algorithms
-2023/2024 Academic Session
-First Semester Examination` : `[MOCK OCR] Extracted text from image
-
-University of Lagos
-Department of Computer Science
-CSC 301 - Data Structures
-2023 First Semester
-
-Question 1: What is a binary search tree?
-Question 2: Explain BFS vs DFS`;
-  return {
-    text: mockText,
-    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
-  };
-}
-async function extractTextFromFile(file) {
-  try {
-    console.log(`Starting Gemini Vision OCR for: ${file.name}`);
-    const base64 = await fileToBase64(file);
-    const mimeType = file.type || "application/octet-stream";
-    const result = await geminiExtractText(file, base64, mimeType);
-    console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
-    return result;
-  } catch (error) {
-    console.warn(`Gemini Vision OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
-  }
-  console.log(`Using mock OCR for: ${file.name}`);
-  return mockExtractTextFromFile(file);
-}
-var init_ocr = __esm({
-  "src/lib/ocr.ts"() {
-    "use strict";
-    init_genkit();
-  }
-});
-
 // src/ai/flows/extract-question-metadata.ts
-var extract_question_metadata_exports = {};
-__export(extract_question_metadata_exports, {
-  extractQuestionMetadataFlow: () => extractQuestionMetadataFlow
-});
 import { z } from "zod";
 var ExtractQuestionMetadataInputSchema, QuestionMetadataSchema, extractQuestionMetadataFlow;
 var init_extract_question_metadata = __esm({
@@ -846,8 +694,8 @@ adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
       return;
     }
     await supabase.from("questions").update({ status: "processing", updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
-    const { extractTextFromBase64: extractTextFromBase642 } = await Promise.resolve().then(() => (init_ocr(), ocr_exports));
-    const { extractQuestionMetadataFlow: extractQuestionMetadataFlow2 } = await Promise.resolve().then(() => (init_extract_question_metadata(), extract_question_metadata_exports));
+    const { ai: ai2 } = await Promise.resolve().then(() => (init_genkit(), genkit_exports));
+    const { z: z5 } = await import("zod");
     const fetch2 = (await import("node-fetch")).default;
     const response = await fetch2(question.file_url);
     if (!response.ok) {
@@ -857,37 +705,86 @@ adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
     const buffer = Buffer.from(arrayBuffer);
     const base64 = buffer.toString("base64");
     const mimeType = response.headers.get("content-type") || "application/octet-stream";
-    console.log(`Re-processing OCR for question ${id} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
-    const { text: ocrText, confidence: ocrConfidence } = await extractTextFromBase642(base64, mimeType);
-    console.log(`OCR re-processing completed: ${ocrText.length} chars extracted`);
-    const metadata = await extractQuestionMetadataFlow2({
-      ocrText,
-      filename: question.file_name || "reprocessed.pdf",
-      uploaderId: question.uploader_id || "admin-reprocess"
+    console.log(`Re-processing question ${id} with single Gemini call (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
+    const CombinedResultSchema = z5.object({
+      extractedText: z5.string().describe("Full raw text extracted from the image"),
+      title: z5.string().describe("Short descriptive title (max 100 chars)"),
+      institution: z5.string().describe("University/institution name"),
+      course: z5.string().describe("Course code and name"),
+      faculty: z5.string().optional().describe("Faculty/School"),
+      department: z5.string().optional().describe("Department"),
+      year: z5.string().describe("Academic year range (e.g. 2025/2026)"),
+      semester: z5.enum(["First", "Second"]).describe("Semester"),
+      type: z5.enum(["Objective", "Theory", "Mixed"]).describe("Question type"),
+      contentPreview: z5.string().describe("First 200-300 chars of question content"),
+      fullContent: z5.string().describe("Complete question text as extracted"),
+      answer: z5.string().optional().describe("Model answer if present"),
+      explanation: z5.string().optional().describe("Explanation or marking scheme")
     });
-    console.log(`AI extraction completed for question ${id}:`, {
-      title: metadata.title,
-      institution: metadata.institution,
-      course: metadata.course
+    const startTime = Date.now();
+    const { output } = await ai2.generate({
+      prompt: [
+        {
+          text: `You are an expert at reading academic exam papers from Nigerian universities.
+
+Extract ALL text from this exam paper image and simultaneously extract structured metadata.
+
+Rules for text extraction:
+- Transcribe text faithfully \u2014 do not guess or fabricate
+- Preserve formatting and structure (headings, numbered questions, sub-questions)
+- Include ALL visible text: institution name, course details, instructions, questions
+
+Rules for metadata extraction:
+- institution: The university name
+- course: Course code and name (e.g. "CSC 301 - Data Structures")
+- year: Academic year range (e.g. "2025/2026"). Convert single years to ranges.
+- semester: "First" or "Second"
+- type: "Objective" (MCQ), "Theory" (essay), or "Mixed"
+- contentPreview: First 200-300 chars of actual question content
+- fullContent: Complete question text
+
+Return structured JSON with all fields.`
+        },
+        {
+          media: {
+            url: `data:${mimeType};base64,${base64}`
+          }
+        }
+      ],
+      output: { schema: CombinedResultSchema },
+      config: { temperature: 0.1 }
     });
-    const rawYear = metadata.year || "";
+    const elapsed = Date.now() - startTime;
+    console.log(`Single Gemini call completed in ${elapsed}ms`);
+    if (!output) {
+      throw new Error("Gemini returned no output \u2014 the image may be unreadable");
+    }
+    const ocrText = output.extractedText;
+    if (!ocrText || ocrText.trim().length < 10) {
+      throw new Error("Gemini extracted very little text from the image");
+    }
+    console.log(`Extracted ${ocrText.length} chars, metadata: ${output.title}`);
+    const rawYear = output.year || "";
     const yearMatch = String(rawYear).match(/(\d{4})/);
     const yearSession = yearMatch ? rawYear : String((/* @__PURE__ */ new Date()).getFullYear());
     const yearStart = yearMatch ? yearMatch[1] : String((/* @__PURE__ */ new Date()).getFullYear());
     const updates = {
-      title: metadata.title,
-      institution: metadata.institution,
-      course: metadata.course,
-      faculty: metadata.faculty,
-      department: metadata.department,
+      title: output.title,
+      institution: output.institution,
+      course: output.course,
+      faculty: output.faculty,
+      department: output.department,
       year: yearSession,
-      semester: metadata.semester,
-      type: metadata.type || "Mixed",
-      content_preview: metadata.contentPreview,
-      full_content: metadata.fullContent,
-      answer: metadata.answer,
-      explanation: metadata.explanation,
-      ai_extracted_data: metadata,
+      semester: output.semester,
+      type: output.type || "Mixed",
+      content_preview: output.contentPreview,
+      full_content: output.fullContent,
+      answer: output.answer,
+      explanation: output.explanation,
+      ai_extracted_data: {
+        confidence: { overall: 0.95, institution: 0.92, course: 0.9, year: 0.93, semester: 0.91, type: 0.88 },
+        extractedText: ocrText
+      },
       status: "pending",
       updated_at: (/* @__PURE__ */ new Date()).toISOString()
     };
@@ -907,7 +804,7 @@ adminRouter.post("/:id/reprocess", requireAdmin, async (req, res) => {
       success: true,
       question: updatedQuestion,
       message: "Exam paper re-processed successfully",
-      ocrConfidence
+      ocrConfidence: { overall: 0.95 }
     });
   } catch (error) {
     console.error("Error re-processing exam paper:", error);
@@ -1028,7 +925,116 @@ import multer from "multer";
 
 // src/lib/upload.ts
 init_supabase_server();
-init_ocr();
+
+// src/lib/ocr.ts
+init_genkit();
+async function mockExtractTextFromFile(file) {
+  await new Promise((resolve) => setTimeout(resolve, 1e3));
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  let mockText = "";
+  if (ext === "pdf") {
+    mockText = `[MOCK OCR] Extracted text from PDF: ${file.name}
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures and Algorithms
+2023/2024 Academic Session
+First Semester Examination
+
+Instruction: Answer ALL questions
+
+Question 1 (20 marks)
+(a) Define a binary search tree and explain its properties.
+(b) Write an algorithm to insert a node into a BST.
+(c) What is the time complexity of search operation in a BST?
+
+Question 2 (20 marks)
+(a) Explain the difference between BFS and DFS traversal.
+(b) Apply DFS to the following graph starting from vertex A.
+(c) What are the applications of BFS in real-world scenarios?`;
+  } else if (ext === "jpg" || ext === "jpeg" || ext === "png") {
+    mockText = `[MOCK OCR] Extracted text from image: ${file.name}
+
+University of Lagos
+Department of Computer Science
+CSC 301 - Data Structures
+2023 First Semester
+
+Question 1: What is a binary search tree?
+Question 2: Explain BFS vs DFS`;
+  } else {
+    mockText = `Unsupported file type for OCR: ${ext}. Please upload PDF or image files.`;
+  }
+  return {
+    text: mockText,
+    confidence: { overall: 0.85, institution: 0.9, course: 0.8, year: 0.95, semester: 0.9, type: 0.85 }
+  };
+}
+async function fileToBase64(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  return buffer.toString("base64");
+}
+async function geminiExtractText(file, base64, mimeType) {
+  console.log(`Attempting Gemini Vision OCR for: ${file.name} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
+  const startTime = Date.now();
+  const { output } = await ai.generate({
+    prompt: [
+      {
+        text: `Extract ALL text from this academic exam paper image. Read every word carefully and transcribe it exactly as it appears.
+
+Rules:
+- Transcribe text faithfully \u2014 do not guess, fabricate, or summarize
+- Preserve the original formatting and structure (headings, numbered questions, sub-questions)
+- Include ALL visible text: institution name, course details, instructions, questions, and any other content
+- For Nigerian universities, recognize common abbreviations: UNILAG, UI, OAU, FUTO, ABU, BUK, UNN, OOU, etc.
+- Course codes typically follow patterns like CSC/MTH/PHY/CHM/STA + 3 digits
+- If text is unclear or partially visible, include what you can read and note uncertainty
+
+Return ONLY the extracted text, nothing else.`
+      },
+      {
+        media: {
+          url: `data:${mimeType};base64,${base64}`
+        }
+      }
+    ]
+  });
+  const elapsed = Date.now() - startTime;
+  console.log(`Gemini Vision OCR completed in ${elapsed}ms`);
+  const extractedText = typeof output === "string" ? output : JSON.stringify(output);
+  if (!extractedText || extractedText.trim().length < 10) {
+    throw new Error("Gemini Vision returned empty or very short text");
+  }
+  console.log(`Gemini Vision extracted ${extractedText.length} characters`);
+  return {
+    text: extractedText,
+    confidence: {
+      overall: 0.95,
+      institution: 0.92,
+      course: 0.9,
+      year: 0.93,
+      semester: 0.91,
+      type: 0.88
+    }
+  };
+}
+async function extractTextFromFile(file) {
+  try {
+    console.log(`Starting Gemini Vision OCR for: ${file.name}`);
+    const base64 = await fileToBase64(file);
+    const mimeType = file.type || "application/octet-stream";
+    const result = await geminiExtractText(file, base64, mimeType);
+    console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
+    return result;
+  } catch (error) {
+    console.warn(`Gemini Vision OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
+  }
+  console.log(`Using mock OCR for: ${file.name}`);
+  return mockExtractTextFromFile(file);
+}
+
+// src/lib/upload.ts
 init_process_uploaded_question();
 import { v4 as uuidv42 } from "uuid";
 async function processLinkImport(fileUrl, uploaderId, _metadata = {}) {
