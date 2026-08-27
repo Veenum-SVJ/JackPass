@@ -113,32 +113,52 @@ export default function QuestionView({ question }: { question: Question }) {
                   {question.marksScheme && question.marksScheme.length > 0 && (
                     <div className="mt-3 pt-3 border-t">
                       <h4 className="font-bold font-headline mb-2">Marks Allocation:</h4>
-                      <div className="space-y-3">
-                        {question.marksScheme.map((q, i) => {
-                          const maxPartMarks = q.parts && q.parts.length > 0 ? Math.max(...q.parts.map(p => p.marks)) : q.totalMarks;
-                          return (
-                            <div key={i} className="bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20 rounded p-3">
-                              <div className="flex items-center justify-between mb-1">
-                                <p className="font-semibold text-amber-800 dark:text-amber-300 text-sm">Question {q.question}</p>
-                                <span className="text-xs font-mono text-amber-600 dark:text-amber-400">{q.totalMarks} marks</span>
-                              </div>
-                              {q.parts && q.parts.length > 0 && (
-                                <div className="space-y-1.5">
-                                  {q.parts.map((p, j) => (
-                                    <div key={j} className="flex items-center gap-2">
-                                      <span className="text-xs font-mono text-muted-foreground w-8 shrink-0">{p.label}</span>
-                                      <div className="flex-1 bg-amber-200 dark:bg-amber-800 rounded-full h-1.5">
-                                        <div className="bg-amber-500 dark:bg-amber-400 h-1.5 rounded-full" style={{ width: `${(p.marks / maxPartMarks) * 100}%` }} />
-                                      </div>
-                                      <span className="text-xs text-muted-foreground w-12 text-right shrink-0">{p.marks}m {p.text && <span className="text-xs">— {p.text}</span>}</span>
+                      {(() => {
+                        const answerText = (question.answerGenerated || question.answer || '').toLowerCase();
+                        return (
+                          <div className="space-y-3">
+                            {question.marksScheme.map((q, i) => {
+                              const parts = q.parts || [];
+                              const coveredParts = parts.filter(p => {
+                                const label = p.label.toLowerCase().replace(/[()]/g, '');
+                                return answerText.includes(label.toLowerCase());
+                              });
+                              const coveredMarks = coveredParts.reduce((sum, p) => sum + p.marks, 0);
+                              const isFullyCovered = coveredMarks >= q.totalMarks;
+                              const isPartial = coveredMarks > 0 && !isFullyCovered;
+                              return (
+                                <div key={i} className={cn('border rounded p-3', isFullyCovered ? 'bg-emerald-50 dark:bg-emerald-400/10 border-emerald-200 dark:border-emerald-400/20' : isPartial ? 'bg-amber-50 dark:bg-amber-400/10 border-amber-200 dark:border-amber-400/20' : 'bg-muted/50 border-border')}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <p className={cn('font-semibold text-sm', isFullyCovered ? 'text-emerald-800 dark:text-emerald-300' : isPartial ? 'text-amber-800 dark:text-amber-300' : 'text-muted-foreground')}>Question {q.question}</p>
+                                    <span className={cn('text-xs font-mono', isFullyCovered ? 'text-emerald-600 dark:text-emerald-400' : isPartial ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>{coveredMarks}/{q.totalMarks} marks</span>
+                                  </div>
+                                  {/* Overall question progress bar */}
+                                  <div className="w-full bg-border rounded-full h-1.5 mb-2">
+                                    <div className={cn('h-1.5 rounded-full transition-all duration-500', isFullyCovered ? 'bg-emerald-500 dark:bg-emerald-400' : isPartial ? 'bg-amber-500 dark:bg-amber-400' : 'bg-muted-foreground/20')} style={{ width: `${q.totalMarks > 0 ? (coveredMarks / q.totalMarks) * 100 : 0}%` }} />
+                                  </div>
+                                  {parts.length > 0 && (
+                                    <div className="space-y-1.5">
+                                      {parts.map((p, j) => {
+                                        const label = p.label.toLowerCase().replace(/[()]/g, '');
+                                        const partCovered = answerText.includes(label.toLowerCase());
+                                        return (
+                                          <div key={j} className="flex items-center gap-2">
+                                            <span className="text-xs font-mono text-muted-foreground w-8 shrink-0">{p.label}</span>
+                                            <div className="flex-1 bg-border rounded-full h-1.5">
+                                              <div className={cn('h-1.5 rounded-full transition-all duration-500', partCovered ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-muted-foreground/20')} style={{ width: partCovered ? '100%' : '0%' }} />
+                                            </div>
+                                            <span className={cn('text-xs w-20 text-right shrink-0', partCovered ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-muted-foreground')}>{p.marks}m {partCovered ? '✓' : ''}</span>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
-                                  ))}
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </>
