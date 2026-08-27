@@ -1,4 +1,4 @@
-import type { Question, LecturerSummary } from './types';
+import type { Question, LecturerSummary, MarksQuestion } from './types';
 
 /**
  * A raw row as returned by Supabase (snake_case columns).
@@ -10,7 +10,7 @@ export interface QuestionRow {
   course: string;
   faculty?: string | null;
   department?: string | null;
-  year: string | number; // Accept both for backwards compatibility during migration
+  year: string | number;
   semester: 'First' | 'Second';
   type: 'Objective' | 'Theory' | 'Mixed';
   status: 'pending' | 'approved' | 'rejected';
@@ -18,6 +18,8 @@ export interface QuestionRow {
   full_content: string | null;
   answer?: string | null;
   explanation?: string | null;
+  marks_scheme?: unknown;
+  answer_generated?: string | null;
   file_url?: string | null;
   file_name?: string | null;
   file_type?: string | null;
@@ -48,6 +50,8 @@ export function mapQuestionRow(row: QuestionRow): Question {
     fullContent: row.full_content ?? '',
     answer: row.answer ?? undefined,
     explanation: row.explanation ?? undefined,
+    marksScheme: (row.marks_scheme as MarksQuestion[] | null) ?? undefined,
+    answerGenerated: row.answer_generated ?? undefined,
     fileUrl: row.file_url ?? undefined,
     fileName: row.file_name ?? undefined,
     fileType: row.file_type ?? undefined,

@@ -12,6 +12,7 @@ import {
   useBulkModerateQuestion,
   useUpdateQuestion,
   useReprocessQuestion,
+  useGenerateAnswer,
   type QuestionStatus,
 } from '@/hooks/useAdminQuestions';
 import { useToast } from '@/hooks/use-toast';
@@ -99,6 +100,7 @@ export default function AdminQuestionsPage() {
   const bulkModerate = useBulkModerateQuestion();
   const updateQuestion = useUpdateQuestion();
   const reprocessQuestion = useReprocessQuestion();
+  const generateAnswer = useGenerateAnswer();
 
   // Debounce the search input
   useEffect(() => {
@@ -520,6 +522,16 @@ export default function AdminQuestionsPage() {
                   );
                 }}
                 isReprocessing={reprocessQuestion.isPending}
+                onGenerateAnswer={() => {
+                  generateAnswer.mutate(
+                    { id: question.id },
+                    {
+                      onSuccess: () => toast({ title: 'Answer Generated', description: 'AI model answer has been generated successfully.' }),
+                      onError: (err: Error) => toast({ variant: 'destructive', title: 'Generation Failed', description: err.message }),
+                    }
+                  );
+                }}
+                isGeneratingAnswer={generateAnswer.isPending}
                 selected={selectedIds.has(question.id)}
                 onSelect={(selected) => {
                   if (selected) {

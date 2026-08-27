@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
+import type { MarksQuestion } from '@/lib/types';
 
 export type QuestionStatus = 'pending' | 'approved' | 'rejected';
 
@@ -29,6 +30,8 @@ export interface AdminQuestion {
   };
   answer?: string;
   explanation?: string;
+  marks_scheme?: MarksQuestion[];
+  answer_generated?: string;
 }
 
 export interface AdminQuestionsParams {
@@ -108,7 +111,7 @@ export function useBulkModerateQuestion() {
 }
 
 /**
- * Update exam paper content (admin only). Fields: title, institution, course, course_code, year, semester, type, content_preview, full_content, answer, explanation.
+ * Update exam paper content (admin only).
  */
 export function useUpdateQuestion() {
   const queryClient = useQueryClient();
@@ -129,7 +132,7 @@ export function useUpdateQuestion() {
 }
 
 /**
- * Re-process an exam paper's OCR using Gemini Vision (admin only). Re-runs the full extraction pipeline.
+ * Re-process an exam paper's OCR using Gemini Vision (admin only).
  */
 export function useReprocessQuestion() {
   const queryClient = useQueryClient();
@@ -137,6 +140,25 @@ export function useReprocessQuestion() {
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
       return apiFetch<{ success: boolean; question: AdminQuestion; ocrConfidence: Record<string, number> }>(`/api/admin/questions/${id}/reprocess`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions'] });
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+    },
+  });
+}
+
+/**
+ * Generate AI model answer for an exam paper (admin only).
+ */
+export function useGenerateAnswer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      return apiFetch<{ success: boolean; question: AdminQuestion }>(`/api/admin/questions/${id}/generate-answer`, {
         method: 'POST',
       });
     },

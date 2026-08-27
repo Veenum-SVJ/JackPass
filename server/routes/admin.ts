@@ -174,7 +174,7 @@ adminRouter.put('/:id', requireAdmin, async (req, res) => {
     const supabase = createServerSupabase();
 
     // Only allow updating specific fields
-    const allowedFields = ['title', 'institution', 'course', 'course_code', 'year', 'semester', 'type', 'content_preview', 'full_content', 'answer', 'explanation'];
+    const allowedFields = ['title', 'institution', 'course', 'course_code', 'year', 'semester', 'type', 'content_preview', 'full_content', 'answer', 'explanation', 'marks_scheme', 'answer_generated'];
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     for (const field of allowedFields) {
@@ -272,15 +272,21 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       type: z.enum(['Objective', 'Theory', 'Mixed']).describe('Question type'),
       contentPreview: z.string().describe('First 200-300 chars of question content'),
       fullContent: z.string().describe('Complete question text as extracted'),
-      answer: z.string().optional().describe('Model answer if present'),
-      explanation: z.string().optional().describe('Explanation or marking scheme'),
+      answer: z.string().optional().describe('Model answer if present in document'),
+      explanation: z.string().optional().describe('Explanation or marking scheme if present'),
+      marksScheme: z.array(z.object({
+        question: z.string(),
+        totalMarks: z.number(),
+        parts: z.array(z.object({ label: z.string(), marks: z.number(), text: z.string().optional() })).optional(),
+      })).optional().describe('Marks allocation from exam paper'),
+      answerGenerated: z.string().optional().describe('AI-generated model answer'),
     });
 
     const startTime = Date.now();
     const { output } = await ai.generate({
       prompt: [
         {
-          text: `You are an expert at reading academic exam papers from Nigerian universities.\n\nExtract ALL text from this exam paper image and simultaneously extract structured metadata.\n\nRules for text extraction:\n- Transcribe text faithfully — do not guess or fabricate\n- Preserve formatting and structure (headings, numbered questions, sub-questions)\n- Include ALL visible text: institution name, course details, instructions, questions\n\nRules for metadata extraction:\n- institution: The university name\n- course: Course code and name (e.g. \"CSC 301 - Data Structures\")\n- year: Academic year range (e.g. \"2025/2026\"). Convert single years to ranges.\n- semester: \"First\" or \"Second\"\n- type: \"Objective\" (MCQ), \"Theory\" (essay), or \"Mixed\"\n- contentPreview: First 200-300 chars of actual question content\n- fullContent: Complete question text\n\nReturn structured JSON with all fields.`,
+          text: `You are an expert at reading academic exam papers from Nigerian universities.\n\nExtract ALL text from this exam paper image and simultaneously extract structured metadata.\n\nRules for text extraction:\n- Transcribe text faithfully — do not guess or fabricate\n- Preserve formatting and structure (headings, numbered questions, sub-questions)\n- Include ALL visible text: institution name, course details, instructions, questions\n\nRules for metadata extraction:\n- institution: The university name\n- course: Course code and name (e.g. \"CSC 301 - Data Structures\")\n- year: Academic year range (e.g. \"2025/2026\"). Convert single years to ranges.\n- semester: \"First\" or \"Second\"\n- type: \"Objective\" (MCQ), \"Theory\" (essay), or \"Mixed\"\n- contentPreview: First 200-300 chars of actual question content\n- fullContent: Complete question text\n\nRules for marksScheme:\n- Extract ALL marks allocation visible on the paper\n- For each question with marks, create entry with question number, totalMarks, and parts array\n- Each part has label, marks, and brief text\n- If no marks visible, use empty array []\n\nRules for answerGenerated:\n- Write a comprehensive model answer that a top-scoring student would submit\n- For theory: detailed explanations with examples\n- For MCQ: correct option with explanation\n- Structure by question number and sub-parts\n\nReturn structured JSON with all fields.`,
         },
         {
           media: {
@@ -326,6 +332,8 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
       full_content: output.fullContent,
       answer: output.answer,
       explanation: output.explanation,
+      marks_scheme: output.marksScheme || [],
+      answer_generated: output.answerGenerated,
       ai_extracted_data: {
         confidence: { overall: 0.95, institution: 0.92, course: 0.90, year: 0.93, semester: 0.91, type: 0.88 },
         extractedText: ocrText,
@@ -382,6 +390,60 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
   }
 });
 
+// ── Generate Answer: AI-only answer generation (no re-extraction) ──
+adminRouter.post('/:id/generate-answer', requireAdmin, async (req, res) => {
+  const id = String(req.params.id);
+  try {
+    const supabase = createServerSupabase();
+    const { data: question, error: fetchError } = await supabase
+      .from('questions')
+      .select('id, full_content, marks_scheme')
+      .eq('id', id)
+      .single();
+    if (fetchError || !question) { res.status(404).json({ error: 'Exam paper not found' }); return; }
+    if (!question.full_content) { res.status(400).json({ error: 'No question content to generate answer from' }); return; }
+
+    const { ai } = await import('../../src/ai/genkit');
+    const { z } = await import('zod');
+
+    const AnswerSchema = z.object({
+      answer: z.string().describe('Comprehensive model answer'),
+      explanation: z.string().optional().describe('Step-by-step explanation'),
+    });
+
+    const marksContext = question.marks_scheme && Array.isArray(question.marks_scheme) && question.marks_scheme.length > 0
+      ? `\n\nMarks allocation:\n${JSON.stringify(question.marks_scheme, null, 2)}\n\nStructure your answer to address each sub-part.`
+      : '';
+
+    const startTime = Date.now();
+    const { output } = await ai.generate({
+      prompt: `You are an expert academic tutor specializing in Nigerian university courses.\n\nGiven the following exam questions, write a comprehensive model answer.\n\nQuestions:\n${question.full_content}${marksContext}\n\nRules:\n- Answer ALL questions thoroughly\n- For theory: detailed explanations with examples\n- For MCQ: correct option with explanation\n- If marks are allocated, match the marks weight\n- Use clear formatting with question numbers\n\nReturn ONLY valid JSON matching the schema.`,
+      output: { schema: AnswerSchema },
+      config: { temperature: 0.3 },
+    });
+
+    const elapsed = Date.now() - startTime;
+    console.log(`Answer generation completed in ${elapsed}ms`);
+
+    if (!output) { throw new Error('AI failed to generate answer'); }
+
+    const { error: updateError } = await supabase
+      .from('questions')
+      .update({ answer_generated: output.answer, explanation: output.explanation, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (updateError) { throw new Error(`Failed to update: ${updateError.message}`); }
+
+    const { data: updated, error: fetchErr } = await supabase.from('questions').select('*').eq('id', id).single();
+    if (fetchErr) throw fetchErr;
+
+    res.json({ success: true, question: updated, message: 'Answer generated successfully' });
+  } catch (error: any) {
+    console.error('Error generating answer:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate answer' });
+  }
+});
+
+// ── Approve / Reject ──
 adminRouter.post('/:id/:action', requireAdmin, async (req, res) => {
   const id = String(req.params.id);
   const action = String(req.params.action);

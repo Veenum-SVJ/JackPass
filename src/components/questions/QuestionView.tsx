@@ -61,18 +61,43 @@ export default function QuestionView({ question }: { question: Question }) {
           </Button>
           {showAnswer && (
             <div className="p-4 bg-primary/5 border border-primary/10 rounded-lg space-y-4 animate-in fade-in-50">
-              {question.answer || question.explanation ? (
+              {question.answer || question.answerGenerated || question.explanation ? (
                 <>
-                  {question.answer && (
+                  {question.answerGenerated && (
+                    <div>
+                      <h4 className="font-bold font-headline">Model Answer:</h4>
+                      <p className="font-code text-primary whitespace-pre-wrap">{question.answerGenerated}</p>
+                    </div>
+                  )}
+                  {!question.answerGenerated && question.answer && (
                     <div>
                       <h4 className="font-bold font-headline">Answer:</h4>
-                      <p className="font-code text-primary">{question.answer}</p>
+                      <p className="font-code text-primary whitespace-pre-wrap">{question.answer}</p>
                     </div>
                   )}
                   {question.explanation && (
                     <div>
                       <h4 className="font-bold font-headline mt-2">Explanation:</h4>
-                      <p className="text-muted-foreground">{question.explanation}</p>
+                      <p className="text-muted-foreground whitespace-pre-wrap">{question.explanation}</p>
+                    </div>
+                  )}
+                  {question.marksScheme && question.marksScheme.length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <h4 className="font-bold font-headline mb-2">Marks Allocation:</h4>
+                      <div className="space-y-2">
+                        {question.marksScheme.map((q, i) => (
+                          <div key={i} className="bg-amber-50 dark:bg-amber-400/10 border border-amber-200 dark:border-amber-400/20 rounded p-2">
+                            <p className="font-semibold text-amber-800 dark:text-amber-300 text-sm">Question {q.question} — {q.totalMarks} marks</p>
+                            {q.parts && q.parts.length > 0 && (
+                              <div className="ml-3 mt-1">
+                                {q.parts.map((p, j) => (
+                                  <p key={j} className="text-xs text-muted-foreground"><span className="font-mono">{p.label}</span> {p.marks} marks {p.text && `- ${p.text}`}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </>

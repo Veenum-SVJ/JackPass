@@ -17,6 +17,18 @@ export interface LecturerSummary {
   photoUrl?: string;
 }
 
+export interface MarksPart {
+  label: string;
+  marks: number;
+  text?: string;
+}
+
+export interface MarksQuestion {
+  question: string;
+  totalMarks: number;
+  parts?: MarksPart[];
+}
+
 export interface Question {
   id: string;
   title: string;
@@ -31,6 +43,8 @@ export interface Question {
   fullContent: string;
   answer?: string;
   explanation?: string;
+  marksScheme?: MarksQuestion[];
+  answerGenerated?: string;
   fileUrl?: string;
   fileName?: string;
   fileType?: string;

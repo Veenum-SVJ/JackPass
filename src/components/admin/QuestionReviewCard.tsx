@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Check, X, FileText, ChevronLeft, ChevronRight, Edit3, Save, Eye, RefreshCw, AlertTriangle, Maximize2 } from 'lucide-react';
+import { Check, X, FileText, ChevronLeft, ChevronRight, Edit3, Save, Eye, RefreshCw, AlertTriangle, Maximize2, Wand2, BookOpen } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,8 @@ interface QuestionReviewCardProps {
     full_content: string;
     answer?: string;
     explanation?: string;
+    marks_scheme?: Array<{ question: string; totalMarks: number; parts?: Array<{ label: string; marks: number; text?: string }> }>;
+    answer_generated?: string;
     file_url?: string;
     file_name?: string;
     uploader_id: string;
@@ -48,11 +50,13 @@ interface QuestionReviewCardProps {
   onSave?: (updates: Record<string, unknown>) => void;
   onReprocess?: () => void;
   isReprocessing?: boolean;
+  onGenerateAnswer?: () => void;
+  isGeneratingAnswer?: boolean;
   selected?: boolean;
   onSelect?: (selected: boolean) => void;
 }
 
-export function QuestionReviewCard({ question, onApprove, onReject, onSave, onReprocess, isReprocessing, selected, onSelect }: QuestionReviewCardProps) {
+export function QuestionReviewCard({ question, onApprove, onReject, onSave, onReprocess, isReprocessing, onGenerateAnswer, isGeneratingAnswer, selected, onSelect }: QuestionReviewCardProps) {
   const [currentPage, setCurrentPage] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [isFullScreenEdit, setIsFullScreenEdit] = useState(false);
@@ -218,6 +222,18 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
               {isReprocessing ? 'Processing...' : 'Re-process'}
             </Button>
           )}
+          {onGenerateAnswer && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onGenerateAnswer}
+              disabled={isGeneratingAnswer}
+              title="Generate AI model answer"
+            >
+              <Wand2 className={cn('h-4 w-4 mr-1', isGeneratingAnswer && 'animate-spin')} />
+              {isGeneratingAnswer ? 'Generating...' : 'Generate Answer'}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -337,6 +353,31 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
                   </div>
                   {question.answer && (<div><p className="text-xs text-muted-foreground mb-0.5">Answer (AI extracted)</p><p className="bg-green-50 border border-green-200 p-3 rounded text-sm dark:bg-green-400/10 dark:border-green-400/20 max-h-[150px] overflow-y-auto">{question.answer}</p></div>)}
                   {question.explanation && (<div><p className="text-xs text-muted-foreground mb-0.5">Explanation</p><p className="bg-indigo-50 border border-indigo-200 p-3 rounded text-sm dark:bg-indigo-400/10 dark:border-indigo-400/20 max-h-[150px] overflow-y-auto">{question.explanation}</p></div>)}
+                  {question.marks_scheme && question.marks_scheme.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><BookOpen className="h-3 w-3" /> Marks Scheme</p>
+                      <div className="bg-amber-50 border border-amber-200 p-3 rounded text-sm dark:bg-amber-400/10 dark:border-amber-400/20">
+                        {question.marks_scheme.map((q, i) => (
+                          <div key={i} className="mb-2 last:mb-0">
+                            <p className="font-semibold text-amber-800 dark:text-amber-300">Question {q.question} ({q.totalMarks} marks)</p>
+                            {q.parts && q.parts.length > 0 && (
+                              <div className="ml-3 mt-1 space-y-0.5">
+                                {q.parts.map((p, j) => (
+                                  <p key={j} className="text-xs"><span className="font-mono">{p.label}</span> — {p.marks} marks {p.text && <span className="text-muted-foreground">({p.text})</span>}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {question.answer_generated && (
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1"><Wand2 className="h-3 w-3" /> AI-Generated Answer</p>
+                      <p className="bg-emerald-50 border border-emerald-200 p-3 rounded text-sm dark:bg-emerald-400/10 dark:border-emerald-400/20 max-h-[200px] overflow-y-auto whitespace-pre-wrap">{question.answer_generated}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
