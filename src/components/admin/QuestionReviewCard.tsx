@@ -5,8 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Check, X, FileText, ChevronLeft, ChevronRight, Edit3, Save, Eye, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Check, X, FileText, ChevronLeft, ChevronRight, Edit3, Save, Eye, RefreshCw, AlertTriangle, Maximize2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
@@ -54,6 +55,7 @@ interface QuestionReviewCardProps {
 export function QuestionReviewCard({ question, onApprove, onReject, onSave, onReprocess, isReprocessing, selected, onSelect }: QuestionReviewCardProps) {
   const [currentPage, setCurrentPage] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
+  const [isFullScreenEdit, setIsFullScreenEdit] = useState(false);
   const [editData, setEditData] = useState({
     title: question.title,
     institution: question.institution,
@@ -87,6 +89,7 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
   const handleSave = () => {
     onSave?.(editData);
     setIsEditing(false);
+    setIsFullScreenEdit(false);
   };
 
   const isMockOcr = question.content_preview?.startsWith('[MOCK OCR]') || question.full_content?.startsWith('[MOCK OCR]');
@@ -106,9 +109,28 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
       explanation: question.explanation || '',
     });
     setIsEditing(false);
+    setIsFullScreenEdit(false);
+  };
+
+  const openFullScreenEdit = () => {
+    setEditData({
+      title: question.title,
+      institution: question.institution,
+      course: question.course,
+      course_code: question.course_code || '',
+      year: String(question.year),
+      semester: question.semester,
+      type: question.type,
+      content_preview: question.content_preview,
+      full_content: question.full_content,
+      answer: question.answer || '',
+      explanation: question.explanation || '',
+    });
+    setIsFullScreenEdit(true);
   };
 
   return (
+    <>
     <Card className={cn('flex flex-col transition-all', selected && 'ring-2 ring-primary')}>
       <CardHeader className="pb-2">
         {isMockOcr && (
@@ -195,6 +217,15 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
                   {isReprocessing ? 'Processing...' : 'Re-process'}
                 </Button>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openFullScreenEdit}
+                title="Open full-screen editor"
+              >
+                <Maximize2 className="h-4 w-4 mr-1" />
+                Full Screen
+              </Button>
               <Button
                 variant={isEditing ? 'default' : 'outline'}
                 size="sm"
@@ -375,5 +406,113 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
         )}
       </CardFooter>
     </Card>
+
+    {/* Full-Screen Edit Dialog */}
+    <Dialog open={isFullScreenEdit} onOpenChange={(open) => !open && setIsFullScreenEdit(false)}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Edit Exam Paper</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left: Original Image */}
+          {(hasPages || hasFileUrl) && (
+            <div>
+              <p className="text-muted-foreground text-xs mb-2 flex items-center gap-1">
+                <Eye className="h-3 w-3" />
+                Original Exam Paper {hasPages ? `(${currentPage + 1} of ${pages.length})` : ''}
+              </p>
+              <div className="relative bg-muted rounded-lg overflow-hidden border">
+                {hasPages ? (
+                  <>
+                    <img src={pages[currentPage]?.url} alt={`Page ${currentPage + 1}`} className="w-full h-auto object-contain max-h-[600px]" loading="lazy" />
+                    {pages.length > 1 && (
+                      <div className="absolute inset-y-0 left-0 right-0 flex items-center justify-between px-2">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/80 hover:bg-background" onClick={() => setCurrentPage(Math.max(0, currentPage - 1))} disabled={currentPage === 0}><ChevronLeft className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 bg-background/80 hover:bg-background" onClick={() => setCurrentPage(Math.min(pages.length - 1, currentPage + 1))} disabled={currentPage === pages.length - 1}><ChevronRight className="h-4 w-4" /></Button>
+                      </div>
+                    )}
+                  </>
+                ) : question.file_url ? (
+                  <img src={question.file_url} alt="Original exam paper" className="w-full h-auto object-contain max-h-[600px]" loading="lazy" />
+                ) : null}
+              </div>
+              {hasPages && pages.length > 1 && (
+                <div className="flex gap-1 mt-2 justify-center">
+                  {pages.map((_, idx) => (
+                    <button key={idx} onClick={() => setCurrentPage(idx)} className={cn('w-2 h-2 rounded-full transition-colors', idx === currentPage ? 'bg-primary' : 'bg-muted-foreground/30')} aria-label={`Go to page ${idx + 1}`} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Right: Edit Form */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block font-medium">Title</label>
+              <Input value={editData.title} onChange={(e) => setEditData({ ...editData, title: e.target.value })} placeholder="Title" className="text-lg font-semibold" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Institution</label>
+                <Input value={editData.institution} onChange={(e) => setEditData({ ...editData, institution: e.target.value })} placeholder="Institution" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Course Code</label>
+                <Input value={editData.course_code} onChange={(e) => setEditData({ ...editData, course_code: e.target.value })} placeholder="e.g. CSC 301" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Course Name</label>
+                <Input value={editData.course} onChange={(e) => setEditData({ ...editData, course: e.target.value })} placeholder="Course name" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Year / Semester</label>
+                <div className="flex gap-2">
+                  <Input value={editData.year} onChange={(e) => setEditData({ ...editData, year: e.target.value })} placeholder="2025/2026" />
+                  <select value={editData.semester} onChange={(e) => setEditData({ ...editData, semester: e.target.value })} className="rounded border px-2 text-sm">
+                    <option value="First">First</option>
+                    <option value="Second">Second</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Type</label>
+                <select value={editData.type} onChange={(e) => setEditData({ ...editData, type: e.target.value })} className="rounded border px-2 py-1.5 text-sm w-full">
+                  <option value="Objective">Objective</option>
+                  <option value="Theory">Theory</option>
+                  <option value="Mixed">Mixed</option>
+                </select>
+              </div>
+            </div>
+            <Separator />
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Content Preview (first 200-300 chars)</label>
+              <Textarea value={editData.content_preview} onChange={(e) => setEditData({ ...editData, content_preview: e.target.value })} className="min-h-[100px] text-sm" placeholder="Short preview..." />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Full Content (complete exam paper text)</label>
+              <Textarea value={editData.full_content} onChange={(e) => setEditData({ ...editData, full_content: e.target.value })} className="min-h-[250px] text-sm" placeholder="Full extracted text..." />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Answer / Solution</label>
+                <Textarea value={editData.answer} onChange={(e) => setEditData({ ...editData, answer: e.target.value })} className="min-h-[100px] text-sm" placeholder="Model answer..." />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Explanation / Marking Scheme</label>
+                <Textarea value={editData.explanation} onChange={(e) => setEditData({ ...editData, explanation: e.target.value })} className="min-h-[100px] text-sm" placeholder="Marking scheme..." />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+          <Button onClick={handleSave}><Save className="h-4 w-4 mr-2" /> Save Changes</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
