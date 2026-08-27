@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -92,6 +92,8 @@ export default function AdminQuestionsPage() {
   const [page, setPage] = useState(1);
   const [bulkGenProgress, setBulkGenProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   const [bulkReprocessProgress, setBulkReprocessProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  const bulkGenCancelled = useRef(false);
+  const bulkReprocessCancelled = useRef(false);
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   const { data: reprocessStatus } = useReprocessStatus(reprocessingId, !!reprocessingId);
 
@@ -152,11 +154,13 @@ export default function AdminQuestionsPage() {
       return;
     }
 
+    bulkGenCancelled.current = false;
     setBulkGenProgress({ done: 0, total: candidates.length, current: '' });
     let done = 0;
     let failed = 0;
 
     for (const q of candidates) {
+      if (bulkGenCancelled.current) break;
       setBulkGenProgress({ done, total: candidates.length, current: q.title });
       try {
         await generateAnswer.mutateAsync({ id: q.id });
@@ -167,10 +171,13 @@ export default function AdminQuestionsPage() {
       }
     }
 
+    const wasCancelled = bulkGenCancelled.current;
     setBulkGenProgress(null);
     toast({
-      title: 'Bulk Generation Complete',
-      description: `${done} answer(s) generated successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
+      title: wasCancelled ? 'Generation Cancelled' : 'Bulk Generation Complete',
+      description: wasCancelled
+        ? `${done} answer(s) generated before cancellation.`
+        : `${done} answer(s) generated successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
     });
   };
 
@@ -357,10 +364,12 @@ export default function AdminQuestionsPage() {
                 const mockQuestions = questions.filter(q => q.content_preview?.startsWith('[MOCK OCR]') || q.full_content?.startsWith('[MOCK OCR]'));
                 const total = mockQuestions.length;
                 if (total === 0) return;
+                bulkReprocessCancelled.current = false;
                 setBulkReprocessProgress({ done: 0, total, current: '' });
                 let done = 0;
                 let failed = 0;
                 for (const q of mockQuestions) {
+                  if (bulkReprocessCancelled.current) break;
                   setBulkReprocessProgress({ done, total, current: q.title });
                   try {
                     await reprocessQuestion.mutateAsync({ id: q.id });
@@ -370,8 +379,11 @@ export default function AdminQuestionsPage() {
                     failed++;
                   }
                 }
+                const wasCancelled = bulkReprocessCancelled.current;
                 setBulkReprocessProgress(null);
-                toast({ title: 'Re-process Complete', description: `${done} paper(s) re-processed${failed > 0 ? `, ${failed} failed` : ''}.` });
+                toast({ title: wasCancelled ? 'Re-process Cancelled' : 'Re-process Complete', description: wasCancelled
+                  ? `${done} paper(s) re-processed before cancellation.`
+                  : `${done} paper(s) re-processed${failed > 0 ? `, ${failed} failed` : ''}.` });
               }}
               disabled={reprocessQuestion.isPending || !!bulkReprocessProgress}
             >
@@ -399,6 +411,9 @@ export default function AdminQuestionsPage() {
             </div>
             <p className="text-xs mt-1 opacity-70">Each paper takes ~15-20 seconds. Do not close this page.</p>
           </div>
+          <Button variant="ghost" size="sm" onClick={() => { bulkReprocessCancelled.current = true; setBulkReprocessProgress(null); }} className="text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-200 shrink-0">
+            Cancel
+          </Button>
         </div>
       )}
 
@@ -421,7 +436,7 @@ export default function AdminQuestionsPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setBulkGenProgress(null)}
+            onClick={() => { bulkGenCancelled.current = true; setBulkGenProgress(null); }}
             className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
           >
             Cancel
