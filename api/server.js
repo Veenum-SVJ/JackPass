@@ -978,7 +978,7 @@ async function fileToBase64(file) {
 async function geminiExtractText(file, base64, mimeType) {
   console.log(`Attempting Gemini Vision OCR for: ${file.name} (${mimeType}, ${Math.round(base64.length * 0.75 / 1024)}KB)`);
   const startTime = Date.now();
-  const { output } = await ai.generate({
+  const response = await ai.generate({
     prompt: [
       {
         text: `Extract ALL text from this academic exam paper image. Read every word carefully and transcribe it exactly as it appears.
@@ -1002,7 +1002,7 @@ Return ONLY the extracted text, nothing else.`
   });
   const elapsed = Date.now() - startTime;
   console.log(`Gemini Vision OCR completed in ${elapsed}ms`);
-  const extractedText = typeof output === "string" ? output : JSON.stringify(output);
+  const extractedText = response.text;
   if (!extractedText || extractedText.trim().length < 10) {
     throw new Error("Gemini Vision returned empty or very short text");
   }
