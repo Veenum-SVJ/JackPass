@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Loader2, FileText, Clock, CheckCircle, XCircle, CheckCheck, XSquare, ChevronLeft, ChevronRight, Download, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Search, Loader2, FileText, Clock, CheckCircle, XCircle, CheckCheck, XSquare, ChevronLeft, ChevronRight, Download, AlertTriangle, RefreshCw, Wand2 } from 'lucide-react';
 import { QuestionReviewCard } from '@/components/admin/QuestionReviewCard';
 import {
   useAdminQuestions,
@@ -89,6 +89,7 @@ export default function AdminQuestionsPage() {
   const [institutionFilter, setInstitutionFilter] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
+  const [bulkGenProgress, setBulkGenProgress] = useState<{ done: number; total: number; current: string } | null>(null);
 
   const { data: questions = [], isLoading } = useAdminQuestions({
     search: debouncedSearch,
@@ -137,6 +138,36 @@ export default function AdminQuestionsPage() {
         description: error.message || `Could not ${action} the exam paper.`,
       });
     }
+  };
+
+  const handleBulkGenerateAnswers = async () => {
+    // Find questions that have content but no AI-generated answer
+    const candidates = questions.filter(q => q.full_content && !q.answer_generated);
+    if (candidates.length === 0) {
+      toast({ title: 'No questions to process', description: 'All questions with content already have AI-generated answers.' });
+      return;
+    }
+
+    setBulkGenProgress({ done: 0, total: candidates.length, current: '' });
+    let done = 0;
+    let failed = 0;
+
+    for (const q of candidates) {
+      setBulkGenProgress({ done, total: candidates.length, current: q.title });
+      try {
+        await generateAnswer.mutateAsync({ id: q.id });
+        done++;
+      } catch (err) {
+        console.error(`Failed to generate answer for ${q.id}:`, err);
+        failed++;
+      }
+    }
+
+    setBulkGenProgress(null);
+    toast({
+      title: 'Bulk Generation Complete',
+      description: `${done} answer(s) generated successfully${failed > 0 ? `, ${failed} failed` : ''}.`,
+    });
   };
 
   const handleBulkAction = async (action: 'approve' | 'reject') => {
@@ -329,6 +360,53 @@ export default function AdminQuestionsPage() {
             >
               <RefreshCw className={cn('h-4 w-4 mr-2', reprocessQuestion.isPending && 'animate-spin')} />
               Re-process All Mock OCR Papers ({questions.filter(q => q.content_preview?.startsWith('[MOCK OCR]') || q.full_content?.startsWith('[MOCK OCR]')).length})
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Generate Answer Progress */}
+      {bulkGenProgress && (
+        <div className="flex items-start gap-3 rounded-lg border border-blue-300 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-200">
+          <Wand2 className="h-5 w-5 mt-0.5 flex-shrink-0 animate-pulse" />
+          <div className="flex-1">
+            <p className="font-semibold">Generating AI Answers... ({bulkGenProgress.done}/{bulkGenProgress.total})</p>
+            {bulkGenProgress.current && (
+              <p className="text-xs mt-1">Currently processing: {bulkGenProgress.current}</p>
+            )}
+            <div className="mt-2 w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+              <div
+                className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(bulkGenProgress.done / bulkGenProgress.total) * 100}%` }}
+              />
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setBulkGenProgress(null)}
+            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
+          >
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {/* Generate All Answers Banner */}
+      {!isLoading && !bulkGenProgress && questions.some(q => q.full_content && !q.answer_generated) && (
+        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50/50 p-4 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+          <Wand2 className="h-5 w-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold">AI Answers Available</p>
+            <p className="text-xs mt-1">Some questions have extracted content but no AI-generated model answer yet. Generate answers to help students study.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 border-blue-300 text-blue-800 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900"
+              onClick={handleBulkGenerateAnswers}
+            >
+              <Wand2 className="h-4 w-4 mr-2" />
+              Generate All Answers ({questions.filter(q => q.full_content && !q.answer_generated).length})
             </Button>
           </div>
         </div>
