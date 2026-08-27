@@ -73,6 +73,18 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
     answer: question.answer || '',
     explanation: question.explanation || '',
   });
+  type MarksQ = { question: string; totalMarks: number; parts?: { label: string; marks: number; text?: string }[] };
+  const [editMarksScheme, setEditMarksScheme] = useState<MarksQ[]>(() => {
+    try {
+      const ms = question.marks_scheme;
+      if (!Array.isArray(ms)) return [];
+      return ms.map((q: any) => ({
+        question: q.question ?? '',
+        totalMarks: q.totalMarks ?? 0,
+        parts: Array.isArray(q.parts) ? q.parts.map((p: any) => ({ label: p.label ?? '', marks: p.marks ?? 0, text: p.text ?? '' })) : [],
+      }));
+    } catch { return []; }
+  });
   const statusColors = {
     pending: 'bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300',
     approved: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300',
@@ -91,7 +103,7 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
   const hasFileUrl = !!question.file_url;
 
   const handleSave = () => {
-    onSave?.(editData);
+    onSave?.({ ...editData, marks_scheme: editMarksScheme });
     setIsEditing(false);
     setIsFullScreenEdit(false);
   };
@@ -130,6 +142,10 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
       answer: question.answer || '',
       explanation: question.explanation || '',
     });
+    try {
+      const ms = question.marks_scheme;
+      setEditMarksScheme(Array.isArray(ms) ? (ms as MarksQ[]) : []);
+    } catch { setEditMarksScheme([]); }
     setIsFullScreenEdit(true);
   };
 
@@ -543,6 +559,123 @@ export function QuestionReviewCard({ question, onApprove, onReject, onSave, onRe
                 <label className="text-xs text-muted-foreground mb-1 block">Explanation / Marking Scheme</label>
                 <Textarea value={editData.explanation} onChange={(e) => setEditData({ ...editData, explanation: e.target.value })} className="min-h-[100px] text-sm" placeholder="Marking scheme..." />
               </div>
+            </div>
+            <Separator />
+            {/* Marks Scheme Editor */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs text-muted-foreground font-medium flex items-center gap-1"><BookOpen className="h-3 w-3" /> Marks Scheme</label>
+                <Button variant="outline" size="sm" onClick={() => setEditMarksScheme([...editMarksScheme, { question: String(editMarksScheme.length + 1), totalMarks: 0, parts: [] }])}>
+                  + Add Question
+                </Button>
+              </div>
+              {editMarksScheme.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No marks scheme yet. Click "Add Question" to start, or Re-process to extract from the exam paper.</p>
+              ) : (
+                <div className="space-y-3">
+                  {editMarksScheme.map((q, qi) => (
+                    <div key={qi} className="border rounded-lg p-3 bg-muted/30">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-semibold">Q{qi + 1}.</span>
+                        <Input
+                          value={q.question}
+                          onChange={(e) => {
+                            const updated = [...editMarksScheme];
+                            const prev = updated[qi]!;
+                            updated[qi] = { question: e.target.value, totalMarks: prev.totalMarks, parts: prev.parts };
+                            setEditMarksScheme(updated);
+                          }}
+                          className="h-7 text-xs w-20"
+                          placeholder="#"
+                        />
+                        <span className="text-xs text-muted-foreground">Total:</span>
+                        <Input
+                          type="number"
+                          value={q.totalMarks || ''}
+                          onChange={(e) => {
+                            const updated = [...editMarksScheme];
+                            const prev = updated[qi]!;
+                            updated[qi] = { question: prev.question, totalMarks: Number(e.target.value), parts: prev.parts };
+                            setEditMarksScheme(updated);
+                          }}
+                          className="h-7 text-xs w-16"
+                          placeholder="0"
+                        />
+                        <span className="text-xs text-muted-foreground">marks</span>
+                        <Button variant="ghost" size="sm" className="ml-auto h-7 text-destructive" onClick={() => setEditMarksScheme(editMarksScheme.filter((_, i) => i !== qi))}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      {/* Parts */}
+                      <div className="ml-6 space-y-1">
+                        {(q.parts || []).map((p, pi) => (
+                          <div key={pi} className="flex items-center gap-1">
+                            <Input
+                              value={p.label}
+                              onChange={(e) => {
+                                const updated = [...editMarksScheme];
+                                const q = updated[qi]!;
+                                const newParts = [...(q.parts || [])];
+                                newParts[pi] = { label: e.target.value, marks: newParts[pi]?.marks ?? 0, text: newParts[pi]?.text ?? '' };
+                                updated[qi] = { question: q.question, totalMarks: q.totalMarks, parts: newParts };
+                                setEditMarksScheme(updated);
+                              }}
+                              className="h-6 text-xs w-12"
+                              placeholder="(a)"
+                            />
+                            <Input
+                              type="number"
+                              value={p.marks || ''}
+                              onChange={(e) => {
+                                const updated = [...editMarksScheme];
+                                const q = updated[qi]!;
+                                const newParts = [...(q.parts || [])];
+                                newParts[pi] = { label: newParts[pi]?.label ?? '', marks: Number(e.target.value), text: newParts[pi]?.text ?? '' };
+                                updated[qi] = { question: q.question, totalMarks: q.totalMarks, parts: newParts };
+                                setEditMarksScheme(updated);
+                              }}
+                              className="h-6 text-xs w-12"
+                              placeholder="0"
+                            />
+                            <span className="text-xs text-muted-foreground">m</span>
+                            <Input
+                              value={p.text || ''}
+                              onChange={(e) => {
+                                const updated = [...editMarksScheme];
+                                const q = updated[qi]!;
+                                const newParts = [...(q.parts || [])];
+                                newParts[pi] = { label: newParts[pi]?.label ?? '', marks: newParts[pi]?.marks ?? 0, text: e.target.value };
+                                updated[qi] = { question: q.question, totalMarks: q.totalMarks, parts: newParts };
+                                setEditMarksScheme(updated);
+                              }}
+                              className="h-6 text-xs flex-1"
+                              placeholder="Brief description..."
+                            />
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => {
+                              const updated = [...editMarksScheme];
+                              const q = updated[qi]!;
+                              const newParts = (q.parts || []).filter((_, i) => i !== pi);
+                              updated[qi] = { question: q.question, totalMarks: q.totalMarks, parts: newParts };
+                              setEditMarksScheme(updated);
+                            }}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={() => {
+                          const updated = [...editMarksScheme];
+                          const q = updated[qi]!;
+                          const newParts = [...(q.parts || []), { label: '', marks: 0, text: '' }];
+                          updated[qi] = { question: q.question, totalMarks: q.totalMarks, parts: newParts };
+                          setEditMarksScheme(updated);
+                        }}>
+                          + Add Part
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
