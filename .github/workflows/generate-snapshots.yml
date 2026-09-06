@@ -1,0 +1,37 @@
+name: Generate Visual Snapshots
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Regenerate visual snapshots (Linux)
+        # Writes -linux.png baselines in the e2e/visual.spec.ts-snapshots dir.
+        # Download the artifact and commit the linux files to enable the
+        # visual-regression spec on Linux CI runners.
+        run: npx playwright test e2e/visual.spec.ts --update-snapshots
+
+      - name: Upload snapshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-snapshots-linux
+          path: e2e/visual.spec.ts-snapshots
+          if-no-files-found: error
