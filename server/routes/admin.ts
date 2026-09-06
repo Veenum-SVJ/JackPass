@@ -88,7 +88,7 @@ adminBaseRouter.patch('/feedback/:id/status', requireAdmin, async (req, res) => 
     res.json({ success: true, item: data });
   } catch (error: any) {
     console.error('Error updating feedback status:', error);
-    res.status(500).json({ error: error.message || 'Failed to update feedback status' });
+    res.status(500).json({ error: 'Failed to update feedback status' });
   }
 });
 
@@ -189,7 +189,7 @@ adminRouter.post('/bulk/:action', requireAdmin, async (req, res) => {
     });
   } catch (error: any) {
     console.error(`Error bulk ${action}ing questions:`, error);
-    res.status(500).json({ error: error.message || `Failed to bulk ${action} questions` });
+    res.status(500).json({ error: `Failed to bulk ${action} questions` });
   }
 });
 
@@ -234,7 +234,7 @@ adminRouter.put('/:id', requireAdmin, async (req, res) => {
     res.json({ success: true, question: data, message: 'Exam paper updated successfully' });
   } catch (error: any) {
     console.error('Error updating exam paper:', error);
-    res.status(500).json({ error: error.message || 'Failed to update exam paper' });
+    res.status(500).json({ error: 'Failed to update exam paper' });
   }
 });
 
@@ -259,7 +259,8 @@ adminRouter.get('/:id/reprocess-status', requireAdmin, async (req, res) => {
     const step = (data.ai_extracted_data as any)?.reprocess_step || (data.status === 'pending' ? 'idle' : 'unknown');
     res.json({ step, status: data.status });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('Reprocess status error:', error);
+    res.status(500).json({ error: 'Failed to load re-process status' });
   }
 });
 
@@ -463,7 +464,7 @@ adminRouter.post('/:id/reprocess', requireAdmin, async (req, res) => {
     } catch (resetError) {
       console.error('Failed to reset question status:', resetError);
     }
-    res.status(500).json({ error: error.message || 'Failed to re-process exam paper' });
+    res.status(500).json({ error: 'Failed to re-process exam paper' });
   }
 });
 
@@ -518,7 +519,7 @@ adminRouter.post('/:id/generate-answer', requireAdmin, async (req, res) => {
     res.json({ success: true, question: updated, message: 'Answer generated successfully', timing: { aiProcessing: aiTime, saveResults: saveTime, total: aiTime + saveTime } });
   } catch (error: any) {
     console.error('Error generating answer:', error);
-    res.status(500).json({ error: error.message || 'Failed to generate answer' });
+    res.status(500).json({ error: 'Failed to generate answer' });
   }
 });
 
@@ -563,7 +564,7 @@ adminRouter.post('/:id/:action', requireAdmin, async (req, res) => {
     });
   } catch (error: any) {
     console.error(`Error ${action}ing question:`, error);
-    res.status(500).json({ error: error.message || `Failed to ${action} question` });
+    res.status(500).json({ error: `Failed to ${action} question` });
   }
 });
 
@@ -649,7 +650,7 @@ adminUsersRouter.post('/:id/promote', requireAdmin, async (req, res) => {
     res.json({ success: true, user: data, message: 'User promoted to admin' });
   } catch (error: any) {
     console.error('Error promoting user:', error);
-    res.status(500).json({ error: error.message || 'Failed to promote user' });
+    res.status(500).json({ error: 'Failed to promote user' });
   }
 });
 
@@ -686,6 +687,6 @@ adminUsersRouter.post('/:id/demote', requireAdmin, async (req, res) => {
     res.json({ success: true, user: data, message: 'Admin privileges removed' });
   } catch (error: any) {
     console.error('Error demoting user:', error);
-    res.status(500).json({ error: error.message || 'Failed to demote user' });
+    res.status(500).json({ error: 'Failed to demote user' });
   }
 });

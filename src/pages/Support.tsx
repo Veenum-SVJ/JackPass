@@ -46,7 +46,10 @@ const faqs = [
   }
 ];
 
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
+
 export default function SupportPage() {
+  useDocumentMeta('Help & Support | JackPass', 'Get help with JackPass — account, uploads, subscriptions, and frequently asked questions.');
   const { toast } = useToast();
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),

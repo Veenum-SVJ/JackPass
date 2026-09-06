@@ -27,6 +27,6 @@ subscriptionRouter.get('/', requireAuth, async (_req, res) => {
     res.json(data || { tier: 'free', status: 'active' });
   } catch (error: any) {
     console.error('Subscription fetch error:', error);
-    res.status(500).json({ error: error.message || 'Failed to fetch subscription' });
+    res.status(500).json({ error: 'Failed to fetch subscription' });
   }
 });

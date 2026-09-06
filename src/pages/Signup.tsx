@@ -20,7 +20,10 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
+
 export default function SignupPage() {
+  useDocumentMeta('Create Account | JackPass', 'Create a free JackPass account to access past questions from Nigerian universities.');
   const { signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();

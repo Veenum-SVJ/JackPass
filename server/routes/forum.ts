@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createServerSupabase } from '../../src/lib/supabase-server';
 import { getBearerToken, getUserFromRequest, requireAuth } from '../middleware';
+import { writeLimiter, voteLimiter } from '../rate-limit';
 
 export const forumRouter = Router();
 
@@ -124,7 +125,7 @@ forumRouter.get('/', async (req, res) => {
 });
 
 /** POST /api/forum — create a post (authenticated). */
-forumRouter.post('/', requireAuth, async (req, res) => {
+forumRouter.post('/', requireAuth, writeLimiter, async (req, res) => {
   try {
     const { title, description, category, university, course } = req.body ?? {};
     const user = res.locals.user as { id: string };
@@ -163,7 +164,7 @@ forumRouter.post('/', requireAuth, async (req, res) => {
 });
 
 /** POST /api/forum/:id/vote — toggle the current user's vote (authenticated). */
-forumRouter.post('/:id/vote', requireAuth, async (req, res) => {
+forumRouter.post('/:id/vote', requireAuth, voteLimiter, async (req, res) => {
   try {
     const id = String(req.params.id);
     const user = res.locals.user as { id: string };
@@ -236,7 +237,7 @@ forumRouter.get('/:id/replies', async (req, res) => {
 });
 
 /** POST /api/forum/:id/replies — add a reply (authenticated). */
-forumRouter.post('/:id/replies', requireAuth, async (req, res) => {
+forumRouter.post('/:id/replies', requireAuth, writeLimiter, async (req, res) => {
   try {
     const id = String(req.params.id);
     const { body } = req.body ?? {};

@@ -48,7 +48,10 @@ function timeAgo(iso: string): string {
   return `${months}mo ago`;
 }
 
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
+
 export default function CommunityPage() {
+  useDocumentMeta('Student Community | JackPass', 'Discuss courses, share study tips, request past questions, and vote on new JackPass features.');
   const { toast } = useToast();
 
   const { data: posts = [], isLoading, isError, refetch } = useForumPosts();
@@ -280,8 +283,8 @@ export default function CommunityPage() {
             <CardHeader><CardTitle>Trending Posts</CardTitle></CardHeader>
             <CardContent>
               <ul className="space-y-3">
-                <li><Link to="#" className="text-primary hover:underline text-sm">Best way to combine school and work.</Link></li>
-                <li><Link to="#" className="text-primary hover:underline text-sm">UNILAG vs OAU: Which is better for Engineering?</Link></li>
+                <li><Link to="/library" className="text-primary hover:underline text-sm">Best way to combine school and work.</Link></li>
+                <li><Link to="/library" className="text-primary hover:underline text-sm">UNILAG vs OAU: Which is better for Engineering?</Link></li>
               </ul>
             </CardContent>
           </Card>
@@ -289,9 +292,9 @@ export default function CommunityPage() {
             <CardHeader><CardTitle>Quick Links</CardTitle></CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                <li><Link to="/upload" className="flex items-center text-sm hover:text-primary">Upload Portal</Link></li>
+                <li><Link to="/library" className="flex items-center text-sm hover:text-primary">Browse Past Questions</Link></li>
                 <li><Link to="/support" className="flex items-center text-sm hover:text-primary">Support</Link></li>
-                <li><Link to="#" className="flex items-center text-sm hover:text-primary">Rules & Guidelines</Link></li>
+                <li><Link to="/terms" className="flex items-center text-sm hover:text-primary">Community Rules & Guidelines</Link></li>
               </ul>
             </CardContent>
           </Card>

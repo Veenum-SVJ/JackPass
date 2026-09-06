@@ -226,8 +226,8 @@ export default function SettingsPage() {
             <CardContent className="space-y-2">
               <Link to="/support#faq" className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"><span>Frequently Asked Questions</span><ChevronRight /></Link>
               <Link to="/support" className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"><span>Contact Support</span><ChevronRight /></Link>
-              <Link to="#" className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"><span>Terms & Conditions</span><ChevronRight /></Link>
-              <Link to="#" className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"><span>Privacy Policy</span><ChevronRight /></Link>
+              <Link to="/terms" className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"><span>Terms & Conditions</span><ChevronRight /></Link>
+              <Link to="/privacy" className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50"><span>Privacy Policy</span><ChevronRight /></Link>
             </CardContent>
           </Card>
         );

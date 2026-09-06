@@ -6,6 +6,14 @@ import { processUploadedQuestionFlow } from '../ai/flows/process-uploaded-questi
 /**
  * Process an uploaded file: store in Supabase Storage, run OCR asynchronously, save metadata.
  */
+/** Extension used in the storage key must be safe — never trust filenames. */
+const SAFE_EXT = /^[a-z0-9]{1,10}$/i;
+function storagePath(uploaderId: string, originalName: string): string {
+  const ext = (originalName.split('.').pop() ?? '').trim();
+  const safeExt = SAFE_EXT.test(ext) ? `.${ext.toLowerCase()}` : '';
+  return `${uploaderId}/${uuidv4()}${safeExt}`;
+}
+
 export async function processQuestionUpload(
   file: File,
   uploaderId: string,
@@ -21,9 +29,8 @@ export async function processQuestionUpload(
 ) {
   const supabase = createServerSupabase();
 
-  // Generate unique file name for storage
-  const fileExt = file.name.split('.').pop();
-  const storageFileName = `${uploaderId}/${uuidv4()}.${fileExt}`;
+  // Generate unique file name for storage (sanitized, unguessable)
+  const storageFileName = storagePath(uploaderId, file.name);
 
   // 1. Upload file to Supabase Storage
   const { error: uploadError } = await supabase.storage
@@ -353,8 +360,7 @@ export async function processQuestionUploadMulti(
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i]!;
-    const fileExt = file.name.split('.').pop();
-    const storageFileName = `${uploaderId}/${uuidv4()}.${fileExt}`;
+    const storageFileName = storagePath(uploaderId, file.name);
 
     const { error: uploadError } = await supabase.storage
       .from('question-files')
@@ -512,14 +518,19 @@ export async function processQuestionUploadMulti(
 /**
  * Helper to get upload status
  */
-export async function getUploadStatus(uploadId: string) {
+/**
+ * Fetch one upload record. When `userId` is supplied the query is scoped to
+ * that user, so callers can never read someone else's upload via the id.
+ * Returns null when no (authorized) row exists instead of throwing.
+ */
+export async function getUploadStatus(uploadId: string, userId?: string) {
   const supabase = createServerSupabase();
-  const { data, error } = await supabase
-    .from('question_uploads')
-    .select('*')
-    .eq('id', uploadId)
-    .single();
-
-  if (error) throw error;
+  let query = supabase.from('question_uploads').select('*').eq('id', uploadId);
+  if (userId) query = query.eq('uploader_id', userId);
+  const { data, error } = await query.single();
+  if (error) {
+    if (error.code === 'PGRST116') return null; // no row for this user
+    throw error;
+  }
   return data;
 }

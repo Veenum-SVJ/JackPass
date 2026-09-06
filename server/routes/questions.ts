@@ -5,6 +5,14 @@ import { mapQuestionRow, type QuestionRow } from '../../src/lib/mappers';
 export const questionsRouter = Router();
 
 /**
+ * Lightweight columns for LIST responses. Full bodies (full_content,
+ * answers, marks schemes, AI payloads) are only served by the detail
+ * endpoint, so browsing stays fast and the wire stays lean.
+ */
+const LIST_SELECT =
+  'id, title, institution, course, faculty, department, year, semester, type, status, content_preview, file_name, file_type, lecturer_id, created_at, updated_at';
+
+/**
  * GET /api/questions
  * List approved questions, optionally filtered.
  */
@@ -13,7 +21,7 @@ questionsRouter.get('/', async (req, res) => {
     const supabase = createServerSupabase();
     let query = supabase
       .from('questions')
-      .select('*')
+      .select(LIST_SELECT)
       .eq('status', 'approved')
       .order('created_at', { ascending: false });
 
@@ -38,7 +46,7 @@ questionsRouter.get('/', async (req, res) => {
     const { data, error } = await query.limit(50);
     if (error) throw error;
 
-    res.json((data ?? []).map(mapQuestionRow));
+    res.json((data ?? []).map((row: any) => mapQuestionRow(row as unknown as QuestionRow)));
   } catch (error) {
     console.error('Error fetching questions:', error);
     res.status(500).json({ error: 'Failed to fetch questions' });

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { createServerSupabase } from '../../src/lib/supabase-server';
+import { writeLimiter, voteLimiter } from '../rate-limit';
 import { requireAuth } from '../middleware';
 
 export const feedbackRouter = Router();
@@ -89,7 +90,7 @@ feedbackRouter.get('/', async (req, res) => {
 });
 
 /** POST /api/feedback — create a feature request (authenticated). */
-feedbackRouter.post('/', requireAuth, async (req, res) => {
+feedbackRouter.post('/', requireAuth, writeLimiter, async (req, res) => {
   try {
     const { title, description, category } = req.body ?? {};
     const user = res.locals.user as { id: string };
@@ -121,7 +122,7 @@ feedbackRouter.post('/', requireAuth, async (req, res) => {
 });
 
 /** POST /api/feedback/:id/vote — toggle the current user's vote (authenticated). */
-feedbackRouter.post('/:id/vote', requireAuth, async (req, res) => {
+feedbackRouter.post('/:id/vote', requireAuth, voteLimiter, async (req, res) => {
   try {
     const id = String(req.params.id);
     const user = res.locals.user as { id: string };

@@ -19,7 +19,10 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
+
 export default function LoginPage() {
+  useDocumentMeta('Login | JackPass', 'Sign in to your JackPass account to view and solve past questions.');
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();

@@ -13,6 +13,14 @@ import { questionsRouter } from '../server/routes/questions';
 import { adminBaseRouter, adminRouter, adminUsersRouter } from '../server/routes/admin';
 import { analyticsRouter, adminAnalyticsRouter } from '../server/routes/analytics';
 import { feedbackRouter } from '../server/routes/feedback';
+import { setTrustProxy, securityHeaders, jsonErrorHandler } from '../server/http-hardening';
+import {
+  apiLimiter,
+  eventsLimiter,
+  questionsLimiter,
+  uploadLimiter,
+  paymentsLimiter,
+} from '../server/rate-limit';
 import { forumRouter } from '../server/routes/forum';
 import { uploadRouter } from '../server/routes/upload';
 import { paymentsRouter } from '../server/routes/payments';
@@ -27,6 +35,8 @@ import { cronRouter, adminDigestRouter } from '../server/routes/cron';
 
 const app = express();
 app.disable('x-powered-by');
+setTrustProxy(app);
+app.use(securityHeaders);
 
 // Parse JSON bodies (limit raised for base64 data URIs).
 // Paystack webhook needs RAW body for HMAC verification.
@@ -37,6 +47,15 @@ app.use((req, res, next) => {
     express.json({ limit: '25mb' })(req, res, next);
   }
 });
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Global safety net on /api, plus tighter per-surface ceilings. See
+// server/rate-limit.ts for the documented tiers.
+app.use('/api', apiLimiter);
+app.use('/api/events', eventsLimiter);
+app.use('/api/questions', questionsLimiter);
+app.use('/api/upload', uploadLimiter);
+app.use('/api/payments', paymentsLimiter);
 
 // ── API routes ───────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
@@ -66,5 +85,8 @@ app.use('/api/admin/digest', adminDigestRouter);
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
+
+// ── JSON error handler (last) ────────────────────────────────────────────────
+app.use(jsonErrorHandler);
 
 export default app;

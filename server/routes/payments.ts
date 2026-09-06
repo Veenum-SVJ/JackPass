@@ -9,6 +9,8 @@ export const paymentsRouter = Router();
 /**
  * POST /api/payments/initiate
  * Initialize a Paystack payment for a subscription tier.
+ * The tier is server-validated; the amount always comes from the server-side
+ * plan table, never from the client.
  */
 paymentsRouter.post('/initiate', requireAuth, async (req, res) => {
   try {
@@ -69,15 +71,18 @@ paymentsRouter.post('/initiate', requireAuth, async (req, res) => {
     });
   } catch (error: any) {
     console.error('Payment initiation error:', error);
-    res.status(500).json({ error: error.message || 'Failed to initiate payment' });
+    res.status(500).json({ error: 'Failed to initiate payment. Please try again.' });
   }
 });
 
 /**
  * GET /api/payments/verify?reference=...
  * Verify a payment by reference and update its record.
+ * Authenticated + ownership-scoped: you may only verify payments you started.
+ * (Idempotent — re-verifying an already-successful reference only re-applies
+ * the same status.)
  */
-paymentsRouter.get('/verify', async (req, res) => {
+paymentsRouter.get('/verify', requireAuth, async (req, res) => {
   try {
     const reference = typeof req.query.reference === 'string' ? req.query.reference : undefined;
 
@@ -86,8 +91,21 @@ paymentsRouter.get('/verify', async (req, res) => {
       return;
     }
 
-    const verification = await verifyPayment(reference);
+    const user = res.locals.user as { id: string };
     const supabase = createServerSupabase();
+
+    // Ownership check: the payment row must belong to the caller.
+    const { data: paymentRow } = await supabase
+      .from('payments')
+      .select('user_id')
+      .eq('id', reference)
+      .maybeSingle();
+    if (!paymentRow || paymentRow.user_id !== user.id) {
+      res.status(404).json({ error: 'Payment not found' });
+      return;
+    }
+
+    const verification = await verifyPayment(reference);
 
     if (verification.data.status === 'success') {
       // Update payment record
@@ -131,7 +149,7 @@ paymentsRouter.get('/verify', async (req, res) => {
     });
   } catch (error: any) {
     console.error('Payment verification error:', error);
-    res.status(500).json({ error: error.message || 'Verification failed' });
+    res.status(500).json({ error: 'Verification failed. Please try again.' });
   }
 });
 
@@ -139,6 +157,8 @@ paymentsRouter.get('/verify', async (req, res) => {
  * POST /api/payments/webhook
  * Handle Paystack webhook events.
  * NOTE: this route receives the RAW body so the HMAC signature can be verified.
+ * Signature + a server-side re-verification with Paystack both gate any grant,
+ * and every write is idempotent (same status applied again is a no-op).
  */
 paymentsRouter.post('/webhook', async (req, res) => {
   try {
@@ -164,7 +184,7 @@ paymentsRouter.post('/webhook', async (req, res) => {
       case 'charge.success': {
         const { reference } = event.data;
 
-        // Verify with Paystack
+        // Verify with Paystack (never trust the webhook payload alone)
         const verification = await verifyPayment(reference);
         if (verification.data.status !== 'success') {
           console.warn(`Payment ${reference} verification failed`);
@@ -224,6 +244,6 @@ paymentsRouter.post('/webhook', async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error('Webhook error:', error);
-    res.status(500).json({ error: error.message || 'Webhook processing failed' });
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
 });

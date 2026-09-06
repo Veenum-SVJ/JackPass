@@ -19,6 +19,7 @@ const Billing = lazy(() => import('./pages/Billing'));
 const Library = lazy(() => import('./pages/Library'));
 const Community = lazy(() => import('./pages/Community'));
 const Support = lazy(() => import('./pages/Support'));
+const Legal = lazy(() => import('./pages/Legal'));
 const Settings = lazy(() => import('./pages/Settings'));
 const QuestionDetail = lazy(() => import('./pages/QuestionDetail'));
 const LecturerProfile = lazy(() => import('./pages/LecturerProfile'));
@@ -63,6 +64,10 @@ export default function App() {
                 <Route path="/library" element={<Library />} />
                 <Route path="/community" element={<RequireAuth><Community /></RequireAuth>} />
                 <Route path="/support" element={<Support />} />
+                <Route path="/privacy" element={<Legal />} />
+                <Route path="/terms" element={<Legal />} />
+                <Route path="/refunds" element={<Legal />} />
+                <Route path="/cookies" element={<Legal />} />
                 <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                 <Route path="/questions/:id" element={<RequireAuth><QuestionDetail /></RequireAuth>} />
                 <Route path="/lecturer/:id" element={<RequireAuth><LecturerProfile /></RequireAuth>} />

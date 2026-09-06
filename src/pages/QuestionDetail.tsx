@@ -10,10 +10,17 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { track } from '@/lib/analytics';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 
 export default function QuestionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: question, isLoading, isError } = useQuestion(id);
+  useDocumentMeta(
+    question ? `${question.title} | JackPass` : 'Question | JackPass',
+    question?.course && question?.institution
+      ? `${question.title} — ${question.course} past question (${question.institution}).`
+      : undefined
+  );
   const [relatedQuestions, setRelatedQuestions] = useState<Question[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
 

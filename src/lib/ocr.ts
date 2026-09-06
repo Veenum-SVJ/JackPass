@@ -11,6 +11,19 @@
 
 import { ai } from '../ai/genkit';
 
+/**
+ * Fabricated "mock OCR" text must never reach production data. When mock
+ * output is disabled, a Gemini failure is surfaced as an error so uploads
+ * are marked failed and admins see a real failure instead of fake content.
+ */
+function mockFallbackAllowed(): boolean {
+  return process.env.ALLOW_MOCK_OCR === 'true' || process.env.NODE_ENV !== 'production';
+}
+
+function mockBlocked(): never {
+  throw new Error('OCR failed: Gemini Vision could not extract text and mock OCR is disabled in production');
+}
+
 // Mock OCR function for development/fallback when Gemini is unavailable
 async function mockExtractTextFromFile(file: File): Promise<{ text: string; confidence: Record<string, number> }> {
   await new Promise(resolve => setTimeout(resolve, 1000));
@@ -115,10 +128,11 @@ export async function extractTextFromBase64(base64: string, mimeType: string): P
     console.log(`Gemini Vision OCR successful (${result.text.length} chars)`);
     return result;
   } catch (error) {
-    console.warn(`Gemini Vision OCR failed for base64 data, falling back to mock:`, error instanceof Error ? error.message : error);
+    console.warn(`Gemini Vision OCR failed for base64 data (${mimeType}):`, error instanceof Error ? error.message : error);
+    if (!mockFallbackAllowed()) mockBlocked();
   }
 
-  console.log(`Using mock OCR for base64 data (${mimeType})`);
+  console.log(`Using mock OCR for base64 data (${mimeType}) — dev fallback only`);
   const mockText = isPDF
     ? `[MOCK OCR] Extracted text from PDF\n\nUniversity of Lagos\nDepartment of Computer Science\nCSC 301 - Data Structures and Algorithms\n2023/2024 Academic Session\nFirst Semester Examination`
     : `[MOCK OCR] Extracted text from image\n\nUniversity of Lagos\nDepartment of Computer Science\nCSC 301 - Data Structures\n2023 First Semester\n\nQuestion 1: What is a binary search tree?\nQuestion 2: Explain BFS vs DFS`;
@@ -141,9 +155,10 @@ export async function extractTextFromFile(file: File): Promise<{ text: string; c
     console.log(`OCR successful for: ${file.name} (${result.text.length} chars)`);
     return result;
   } catch (error) {
-    console.warn(`Gemini Vision OCR failed for ${file.name}, falling back to mock:`, error instanceof Error ? error.message : error);
+    console.warn(`Gemini Vision OCR failed for ${file.name}:`, error instanceof Error ? error.message : error);
+    if (!mockFallbackAllowed()) mockBlocked();
   }
 
-  console.log(`Using mock OCR for: ${file.name}`);
+  console.log(`Using mock OCR for: ${file.name} — dev fallback only`);
   return mockExtractTextFromFile(file);
 }

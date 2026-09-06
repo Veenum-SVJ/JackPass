@@ -14,8 +14,8 @@ export interface QuestionRow {
   semester: 'First' | 'Second';
   type: 'Objective' | 'Theory' | 'Mixed';
   status: 'pending' | 'approved' | 'rejected';
-  content_preview: string | null;
-  full_content: string | null;
+  content_preview?: string | null;
+  full_content?: string | null;
   answer?: string | null;
   explanation?: string | null;
   marks_scheme?: unknown;

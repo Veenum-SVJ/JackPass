@@ -120,7 +120,7 @@ cronRouter.post('/weekly-digest', async (req, res) => {
     res.json({ ok: true, sent: to.length, weekKey });
   } catch (error: any) {
     console.error('Weekly digest failed:', error);
-    res.status(500).json({ error: error.message || 'Digest failed' });
+    res.status(500).json({ error: 'Digest failed' });
   }
 });
 
@@ -145,6 +145,6 @@ adminDigestRouter.post('/send', async (req, res) => {
     res.json({ ok: true, to, window: { start, end }, resendId });
   } catch (error: any) {
     console.error('Digest test send failed:', error);
-    res.status(500).json({ error: error.message || 'Digest send failed' });
+    res.status(500).json({ error: 'Digest send failed' });
   }
 });

@@ -18,7 +18,13 @@ const EMPTY_FILTERS: SearchFilterState = {
   type: '',
 };
 
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
+
 function HomePageContent() {
+  useDocumentMeta(
+    'JackPass — Past Questions for Nigerian Students',
+    'Search, view, and solve past exam questions from Nigerian universities. Courses, past papers, and lecturer reviews in one place.'
+  );
   const { toast } = useToast();
   const [filters, setFilters] = useState<SearchFilterState>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<SearchFilterState>(EMPTY_FILTERS);

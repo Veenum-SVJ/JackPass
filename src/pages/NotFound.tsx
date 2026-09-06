@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
 
 export default function NotFoundPage() {
+  useDocumentMeta('Page not found | JackPass');
   return (
     <div className="relative overflow-hidden flex flex-col items-center justify-center min-h-[50vh] px-4 text-center">
       <div aria-hidden className="absolute inset-0 bg-adire text-primary/10" />

@@ -29,7 +29,10 @@ const EMPTY_FILTERS: SearchFilterState = {
 
 const years = ['2026', '2025', '2024', '2023', '2022', '2021', '2020', '2019'];
 
+import { useDocumentMeta } from '@/hooks/useDocumentMeta';
+
 export default function Library() {
+  useDocumentMeta('Past Questions Library | JackPass', 'Browse and filter past exam questions by institution, course, year, and semester.');
   const { toast } = useToast();
   const [filters, setFilters] = useState<SearchFilterState>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<SearchFilterState>(EMPTY_FILTERS);

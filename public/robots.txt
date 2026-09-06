@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://jackpass-vite.vercel.app/sitemap.xml
