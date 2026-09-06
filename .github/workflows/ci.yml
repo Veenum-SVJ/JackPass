@@ -4,6 +4,10 @@ on:
   push:
     branches: ['**']
   workflow_dispatch:
+  # Nightly full-suite run (includes visual regression) — catches long-term
+  # UI drift and environment rot even when nothing is pushed.
+  schedule:
+    - cron: '0 3 * * *'   # 03:00 UTC daily
 
 concurrency:
   group: ci-${{ github.ref }}

@@ -1141,7 +1141,7 @@ init_supabase_server();
 init_middleware();
 import { Router as Router3 } from "express";
 var analyticsRouter = Router3();
-analyticsRouter.post("/events", async (req, res) => {
+analyticsRouter.post("/", async (req, res) => {
   try {
     const { sessionId, eventName, page, metadata, durationSeconds } = req.body ?? {};
     if (!sessionId || typeof sessionId !== "string" || sessionId.length > 64) {
@@ -2092,12 +2092,7 @@ paymentsRouter.post("/webhook", async (req, res) => {
 
 // server/routes/users.ts
 import { Router as Router7 } from "express";
-import { createClient as createClient3 } from "@supabase/supabase-js";
-init_supabase_utils();
-var serviceClient = createClient3(
-  normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL),
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+init_supabase_server();
 var usersRouter = Router7();
 var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 usersRouter.get("/:userId/uploads", async (req, res) => {
@@ -2107,7 +2102,7 @@ usersRouter.get("/:userId/uploads", async (req, res) => {
       res.json([]);
       return;
     }
-    const { data, error } = await serviceClient.from("questions").select("*").eq("uploader_id", userId).order("created_at", { ascending: false });
+    const { data, error } = await createServerSupabase().from("questions").select("*").eq("uploader_id", userId).order("created_at", { ascending: false });
     if (error) {
       console.error(`Failed to fetch uploads for user ${userId}:`, error);
       res.status(500).json({ error: "Internal Server Error" });

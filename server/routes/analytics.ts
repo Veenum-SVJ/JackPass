@@ -6,10 +6,12 @@ import { getBearerToken, getUserFromRequest, requireAdmin } from '../middleware'
  * POST /api/events
  * Open, fire-and-forget usage tracking. Attaches the user id when a valid
  * session token is present; never fails the client on errors.
+ * (Mounted at /api/events in both server/app.ts and api/_server.ts, so the
+ * route itself is "/" — a nested "/events" here would double the path.)
  */
 export const analyticsRouter = Router();
 
-analyticsRouter.post('/events', async (req, res) => {
+analyticsRouter.post('/', async (req, res) => {
   try {
     const { sessionId, eventName, page, metadata, durationSeconds } = req.body ?? {};
 

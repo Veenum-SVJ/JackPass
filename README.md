@@ -1,5 +1,7 @@
 # JackPass — Academic Question Bank Platform
 
+[![CI](https://github.com/Veenum-SVJ/JackPass/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Veenum-SVJ/JackPass/actions/workflows/ci.yml)
+
 An academic question bank platform for Nigerian students: search, view, and solve past questions from Nigerian universities and institutions. Includes community-driven lecturer profiles with reviews and ratings.
 
 ## 🧱 Tech Stack
