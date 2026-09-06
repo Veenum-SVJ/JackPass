@@ -1,12 +1,6 @@
 import { Router } from 'express';
-import { createClient } from '@supabase/supabase-js';
 import { mapQuestionRow, type QuestionRow } from '../../src/lib/mappers';
-import { normalizeSupabaseUrl } from '../../src/lib/supabase-utils';
-
-const serviceClient = createClient(
-  normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL!),
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createServerSupabase } from '../../src/lib/supabase-server';
 
 export const usersRouter = Router();
 
@@ -25,7 +19,7 @@ usersRouter.get('/:userId/uploads', async (req, res) => {
       return;
     }
 
-    const { data, error } = await serviceClient
+    const { data, error } = await createServerSupabase()
       .from('questions')
       .select('*')
       .eq('uploader_id', userId)

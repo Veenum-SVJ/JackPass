@@ -35,13 +35,17 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Create test env (placeholders — e2e mocks all external services)
+        run: |
+          cat > .env.local <<'EOF'
+          NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-anon
+          SUPABASE_SERVICE_ROLE_KEY=placeholder-service
+          GOOGLE_AI_API_KEY=placeholder
+          EOF
+
       - name: E2E tests (Playwright)
-        # The e2e suite mocks Supabase/Paystack/AI at the network layer, so no
-        # secrets are required. The visual-regression baselines are
-        # Windows-generated (win32) and cannot be compared on Linux runners yet;
-        # generate Linux baselines first to enable them:
-        #   npx playwright test e2e/visual.spec.ts --update-snapshots
-        run: npx playwright test --grep-invert "visual regression"
+        run: npx playwright test
 
       - name: Production build
         run: npm run build

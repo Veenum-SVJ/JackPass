@@ -23,6 +23,15 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      - name: Create test env (placeholders — e2e mocks all external services)
+        run: |
+          cat > .env.local <<'EOF'
+          NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder-anon
+          SUPABASE_SERVICE_ROLE_KEY=placeholder-service
+          GOOGLE_AI_API_KEY=placeholder
+          EOF
+
       - name: Regenerate visual snapshots (Linux)
         # Writes -linux.png baselines in the e2e/visual.spec.ts-snapshots dir.
         # Download the artifact and commit the linux files to enable the
