@@ -36,8 +36,24 @@ jobs:
       - name: Unit tests
         run: npm run test:run
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      # Playwright browser binaries (~150 MB) are cached per lockfile so CI
+      # only downloads them once per @playwright/test bump.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
+      # System deps (apt libs + fonts) are always installed — a fresh runner
+      # doesn't keep them — but the browser binaries themselves come from cache.
+      - name: Install Playwright system deps
+        run: npx playwright install-deps chromium
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
 
       - name: Create test env (placeholders — e2e mocks all external services)
         run: |
