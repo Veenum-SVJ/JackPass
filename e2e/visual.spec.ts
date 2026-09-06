@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { installMocks } from './helpers/mocks';
+import { loginAs } from './helpers/auth';
 
 /**
  * Visual regression suite.
@@ -25,19 +26,6 @@ const THEMES = ['dark', 'light'] as const;
 async function prepare(page: Page, theme: string) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.addInitScript((t) => localStorage.setItem('theme', t), theme);
-}
-
-/** Mocked login (see auth.spec.ts). Dismisses the success toast afterwards. */
-async function loginAs(page: Page) {
-  await page.goto('/login');
-  await page.getByPlaceholder('m@example.com').fill('student@example.com');
-  await page.getByLabel('Password').fill('correct-password');
-  await page.getByRole('button', { name: 'Login', exact: true }).click();
-  await expect(page).toHaveURL('/');
-  // Radix toast close button (no accessible name, so query by role/status).
-  await page.evaluate(() => {
-    document.querySelectorAll('[role="status"] button').forEach((b) => (b as HTMLButtonElement).click());
-  });
 }
 
 async function snapshotPage(page: Page, path: string, theme: string, name: string) {

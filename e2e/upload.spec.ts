@@ -1,14 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { installMocks } from './helpers/mocks';
-
-/** Log in through the UI with the mocked Supabase auth. */
-async function loginAs(page: Page) {
-  await page.goto('/login');
-  await page.getByPlaceholder('m@example.com').fill('student@example.com');
-  await page.getByLabel('Password').fill('correct-password');
-  await page.getByRole('button', { name: 'Login', exact: true }).click();
-  await expect(page).toHaveURL('/');
-}
+import { loginAs } from './helpers/auth';
 
 test.describe('upload flow', () => {
   test('signed-out users are asked to log in when clicking upload', async ({ page }) => {

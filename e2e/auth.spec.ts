@@ -1,84 +1,51 @@
 import { test, expect } from '@playwright/test';
 import { installMocks } from './helpers/mocks';
 
-test.describe('login', () => {
-  test('shows validation errors when submitting an empty form', async ({ page }) => {
+test.describe('login (OAuth)', () => {
+  test('shows Google and Apple sign-in buttons and no password form', async ({ page }) => {
     await installMocks(page);
     await page.goto('/login');
 
-    await page.getByRole('button', { name: 'Login', exact: true }).click();
-
-    await expect(page.getByText('Please enter a valid email address.')).toBeVisible();
-    await expect(page.getByText('Password must be at least 6 characters.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue with Apple' })).toBeVisible();
+    // The email/password form is gone
+    await expect(page.getByPlaceholder('m@example.com')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Login', exact: true })).toHaveCount(0);
   });
 
-  test('shows an error toast for invalid credentials', async ({ page }) => {
+  test('Google button starts the provider sign-in flow', async ({ page }) => {
     await installMocks(page);
-    // Override the token endpoint AFTER installMocks so this route wins
-    await page.route('**/auth/v1/token*', (route) =>
-      route.fulfill({
-        status: 400,
-        json: { error: 'invalid_grant', error_description: 'Invalid login credentials' },
-      })
-    );
-
     await page.goto('/login');
-    await page.getByPlaceholder('m@example.com').fill('student@example.com');
-    await page.getByLabel('Password').fill('wrong-password');
-    await page.getByRole('button', { name: 'Login', exact: true }).click();
 
-    await expect(page.getByText('Login Failed', { exact: true })).toBeVisible();
-    await expect(page).toHaveURL(/\/login$/);
+    await page.getByRole('button', { name: 'Continue with Google' }).click();
+
+    // The SDK builds the authorize URL client-side and redirects the browser
+    // to it (the Supabase host is a placeholder in tests, so the navigation
+    // fails to load — but the URL target proves the flow started correctly).
+    await expect(page).toHaveURL(/\/auth\/v1\/authorize\?provider=google/);
+    await expect(page).toHaveURL(/redirect_to=.*%2Fauth%2Fcallback/);
   });
 
-  test('logs in successfully and redirects to the home page', async ({ page }) => {
+  test('Apple button starts the provider sign-in flow', async ({ page }) => {
     await installMocks(page);
     await page.goto('/login');
 
-    await page.getByPlaceholder('m@example.com').fill('student@example.com');
-    await page.getByLabel('Password').fill('correct-password');
-    await page.getByRole('button', { name: 'Login', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue with Apple' }).click();
 
-    await expect(page.getByText('Login Successful!', { exact: true })).toBeVisible();
-    await expect(page).toHaveURL('/');
-    await expect(page.getByRole('heading', { name: 'Unlock Academic Success' })).toBeVisible();
-  });
-
-  test('toggles password visibility', async ({ page }) => {
-    await installMocks(page);
-    await page.goto('/login');
-
-    const password = page.getByLabel('Password');
-    await password.fill('secret123');
-    await expect(password).toHaveAttribute('type', 'password');
-
-    await page.getByRole('button', { name: 'Show password' }).click();
-    await expect(password).toHaveAttribute('type', 'text');
+    await expect(page).toHaveURL(/\/auth\/v1\/authorize\?provider=apple/);
+    await expect(page).toHaveURL(/redirect_to=.*%2Fauth%2Fcallback/);
   });
 });
 
-test.describe('signup', () => {
-  test('shows validation errors when submitting an empty form', async ({ page }) => {
+test.describe('signup (OAuth)', () => {
+  test('shows Google and Apple sign-in buttons and no sign-up form', async ({ page }) => {
     await installMocks(page);
     await page.goto('/signup');
 
-    await page.getByRole('button', { name: 'Sign Up' }).click();
-
-    await expect(page.getByText('Name must be at least 2 characters.')).toBeVisible();
-    await expect(page.getByText('Please enter a valid email address.')).toBeVisible();
-  });
-
-  test('signs up successfully and redirects to login', async ({ page }) => {
-    await installMocks(page);
-    await page.goto('/signup');
-
-    await page.getByPlaceholder('John Doe').fill('Test Student');
-    await page.getByPlaceholder('m@example.com').fill('student@example.com');
-    await page.getByLabel('Password').fill('correct-password');
-    await page.getByRole('button', { name: 'Sign Up' }).click();
-
-    await expect(page.getByText('Account Created!', { exact: true })).toBeVisible();
-    await expect(page).toHaveURL('/login');
+    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue with Apple' })).toBeVisible();
+    await expect(page.getByPlaceholder('John Doe')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign Up' })).toHaveCount(0);
   });
 });
 
@@ -88,8 +55,8 @@ test.describe('route guards', () => {
     await page.goto('/profile');
 
     await expect(page).toHaveURL(/\/login$/);
-    // The login card renders (CardTitle is a div, not a heading)
-    await expect(page.getByText('Enter your email below to login to your account.')).toBeVisible();
+    // The OAuth login card renders
+    await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   });
 
   test('redirects signed-out users away from billing', async ({ page }) => {
@@ -98,4 +65,4 @@ test.describe('route guards', () => {
 
     await expect(page).toHaveURL(/\/login$/);
   });
-});
+});

@@ -4,6 +4,11 @@ on:
   push:
     branches: ['**']
   workflow_dispatch:
+    inputs:
+      update_visual_baselines:
+        description: 'Regenerate visual baselines on Linux (--update-snapshots) and upload them as an artifact'
+        type: boolean
+        default: false
   # Nightly full-suite run (includes visual regression) — catches long-term
   # UI drift and environment rot even when nothing is pushed.
   schedule:
@@ -65,7 +70,27 @@ jobs:
           EOF
 
       - name: E2E tests (Playwright)
+        if: github.event.inputs.update_visual_baselines != 'true'
         run: npx playwright test
+
+      # Visual baselines are platform-specific (Linux vs win32). When a UI
+      # change is intentional, dispatch the workflow with
+      # update_visual_baselines=true from the branch you want to fix — this
+      # regenerates the LINUX baselines on a real Linux runner and uploads them
+      # as an artifact to download and commit. Windows devs regenerate their
+      # own with `npm run test:visual:update`.
+      - name: Regenerate visual baselines (Linux)
+        if: github.event.inputs.update_visual_baselines == 'true'
+        run: npx playwright test e2e/visual.spec.ts --update-snapshots
+
+      - name: Upload regenerated baselines
+        if: github.event.inputs.update_visual_baselines == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines
+          path: e2e/visual.spec.ts-snapshots/
+          if-no-files-found: error
+          retention-days: 14
 
       # When the nightly visual run catches UI drift, upload the diff images
       # and traces so a maintainer can actually see what changed.

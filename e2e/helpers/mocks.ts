@@ -150,6 +150,12 @@ export async function installMocks(page: Page, options: MockOptions = {}) {
   await page.route('**/auth/v1/token*', (route) => route.fulfill({ json: session }));
   // signUp — return a valid auth response so the client can parse it
   await page.route('**/auth/v1/signup', (route) => route.fulfill({ json: session }));
+  // OAuth provider availability — /login and /signup render buttons for the
+  // providers the settings endpoint reports as enabled (fetched directly by
+  // OAuthButtons when a Supabase URL is configured).
+  await page.route('**/auth/v1/settings', (route) =>
+    route.fulfill({ json: { external: { google: true, apple: true } } })
+  );
   // getUser()
   await page.route('**/auth/v1/user', (route) => {
     if (route.request().method() === 'POST') {

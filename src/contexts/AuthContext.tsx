@@ -8,8 +8,10 @@ interface AuthContextType {
   loading: boolean;
   online: boolean;
   isAdmin: boolean;
+  /** OAuth sign-in (Google/Apple). Redirects the browser to the provider. */
+  signInWithOAuth: (provider: 'google' | 'apple') => Promise<void>;
+  /** Email/password sign-in — kept for the admin login page only. */
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, metadata?: { name?: string }) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (updates: { avatar?: string; name?: string }) => Promise<void>;
 }
@@ -101,12 +103,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
   };
 
-  const signUp = async (email: string, password: string, metadata?: { name?: string }) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
+  const signInWithOAuth = async (provider: 'google' | 'apple') => {
+    // In the browser the SDK redirects the current tab to the provider's
+    // auth page; the user then returns to /auth/callback with the session.
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
       options: {
-        data: metadata,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (error) throw error;
@@ -130,7 +133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, online, isAdmin, signIn, signUp, signOut, updateUser }}>
+    <AuthContext.Provider value={{ user, session, loading, online, isAdmin, signInWithOAuth, signIn, signOut, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

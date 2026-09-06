@@ -62,13 +62,6 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
-                  <h3 className="font-medium">Password</h3>
-                  <p className="text-sm text-muted-foreground">Last changed 3 months ago</p>
-                </div>
-                <Button variant="outline" onClick={() => toast({ title: 'Coming Soon', description: 'Password change functionality will be available soon.' })}>Change Password</Button>
-              </div>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
                   <h3 className="font-medium">Two-Factor Authentication</h3>
                   <p className="text-sm text-muted-foreground">Keep your account extra secure.</p>
                 </div>

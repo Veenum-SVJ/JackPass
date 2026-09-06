@@ -1,13 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { installMocks } from './helpers/mocks';
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
-  await page.getByPlaceholder('m@example.com').fill('admin@example.com');
-  await page.getByLabel('Password').fill('correct-password');
-  await page.getByRole('button', { name: 'Login', exact: true }).click();
-  await expect(page).toHaveURL('/');
-}
+import { loginAs as loginAsAdmin } from './helpers/auth';
 
 test.describe('Weekly email digest (admin)', () => {
   test('digest card is visible on the analytics page', async ({ page }) => {

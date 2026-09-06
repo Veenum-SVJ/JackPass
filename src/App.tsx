@@ -14,6 +14,7 @@ import { RequireAuth, RequireAdmin } from './components/auth/AuthGuard';
 const Home = lazy(() => import('./pages/Home'));
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Billing = lazy(() => import('./pages/Billing'));
 const Library = lazy(() => import('./pages/Library'));
@@ -59,6 +60,7 @@ export default function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
                 <Route path="/billing" element={<RequireAuth><Billing /></RequireAuth>} />
                 <Route path="/library" element={<Library />} />
