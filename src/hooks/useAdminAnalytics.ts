@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 
 export interface AnalyticsOverview {
@@ -78,5 +78,23 @@ export function useAnalyticsFunnels(days: number) {
   return useQuery({
     queryKey: ['admin-analytics-funnels', days],
     queryFn: () => fetchJson<Funnel[]>(`/api/admin/analytics/funnels?days=${days}`),
+  });
+}
+
+export interface DigestSendResult {
+  ok: boolean;
+  to: string[];
+  window: { start: string; end: string };
+  resendId: string;
+}
+
+/** Send a test analytics digest email (admin only). */
+export function useSendDigest() {
+  return useMutation({
+    mutationFn: (input: { days: number; to?: string }) => {
+      const params = new URLSearchParams({ days: String(input.days) });
+      if (input.to) params.set('to', input.to);
+      return apiFetch<DigestSendResult>(`/api/admin/digest/send?${params}`, { method: 'POST' });
+    },
   });
 }

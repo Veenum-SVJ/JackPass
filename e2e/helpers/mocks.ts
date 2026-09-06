@@ -307,6 +307,13 @@ export async function installMocks(page: Page, options: MockOptions = {}) {
     route.fulfill({ json: { success: true, item: { id: 'x', status: 'planned' } } })
   );
 
+  // Weekly email digest (admin test send)
+  await page.route('**/api/admin/digest/send*', (route) =>
+    route.fulfill({
+      json: { ok: true, to: ['admin@example.com'], window: { start: '2026-08-31', end: '2026-09-06' }, resendId: 're_mock_1' },
+    })
+  );
+
   // Upload + AI processing
   await page.route('**/api/upload', (route) =>
     route.fulfill({

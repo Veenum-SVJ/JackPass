@@ -19,7 +19,10 @@ import {
   BarChart3,
   MousePointerClick,
   Filter,
+  Mail,
 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { useSendDigest } from '@/hooks/useAdminAnalytics';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -75,6 +78,7 @@ export default function AdminAnalyticsPage() {
   const pages = useAnalyticsPages(days);
   const events = useAnalyticsEvents(days);
   const funnels = useAnalyticsFunnels(days);
+  const sendDigest = useSendDigest();
 
   const statCards = [
     { label: 'Sessions', value: overview.data?.sessions ?? null, icon: Activity },
@@ -306,6 +310,44 @@ export default function AdminAnalyticsPage() {
             ))
           )}
         </div>
+      </section>
+
+      {/* Weekly email digest */}
+      <section>
+        <h2 className="text-lg font-semibold font-headline mb-4 flex items-center gap-2">
+          <Mail className="h-4 w-4 text-muted-foreground" />
+          Weekly Email Digest
+        </h2>
+        <Card>
+          <CardContent className="py-6">
+            <div className="flex flex-col md:flex-row md:items-center gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium">Every Monday 08:00 UTC, all admins receive a 7-day summary.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Requires RESEND_API_KEY and CRON_SECRET in Vercel env; recipients are admin profiles.
+                </p>
+              </div>
+              <Button
+                onClick={() =>
+                  sendDigest.mutate(
+                    { days: 7 },
+                    {
+                      onSuccess: (r) =>
+                        toast({
+                          title: 'Digest sent',
+                          description: `Sent to ${r.to.join(', ')} for ${r.window.start} → ${r.window.end}.`,
+                        }),
+                      onError: (e: Error) => toast({ title: 'Digest failed', description: e.message, variant: 'destructive' }),
+                    }
+                  )
+                }
+                disabled={sendDigest.isPending}
+              >
+                {sendDigest.isPending ? 'Sending…' : 'Send test digest now'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </section>
     </div>
   );

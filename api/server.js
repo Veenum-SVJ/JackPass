@@ -1140,6 +1140,124 @@ adminUsersRouter.post("/:id/demote", requireAdmin, async (req, res) => {
 init_supabase_server();
 init_middleware();
 import { Router as Router3 } from "express";
+
+// src/lib/analytics-summary.ts
+var FUNNELS = [
+  { name: "Discovery \u2192 Answer", steps: ["search_performed", "question_viewed", "answer_revealed"] },
+  { name: "Upload Flow", steps: ["upload_dialog_opened", "upload_submitted"] }
+];
+function daysAgoISO(days) {
+  return new Date(Date.now() - days * 864e5).toISOString();
+}
+async function fetchEvents(supabase, days) {
+  const { data, error } = await supabase.from("events").select("id, session_id, user_id, event_name, page, created_at").gte("created_at", daysAgoISO(days)).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+function computeOverview(events, sessionDurations) {
+  const pageViews = events.filter((e) => e.event_name === "page_view").length;
+  const sessionIds = new Set(events.map((e) => e.session_id).filter(Boolean));
+  const userIds = new Set(events.map((e) => e.user_id).filter(Boolean));
+  const durations = sessionDurations.filter((d) => d > 0);
+  const avgSessionDuration = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+  return {
+    sessions: sessionIds.size,
+    pageViews,
+    uniqueUsers: userIds.size,
+    avgSessionDuration,
+    totalEvents: events.length
+  };
+}
+async function fetchOverview(supabase, days) {
+  const since = daysAgoISO(days);
+  const [events, sessions] = await Promise.all([
+    fetchEvents(supabase, days),
+    supabase.from("sessions").select("duration_seconds").gte("last_seen_at", since)
+  ]);
+  const durations = (sessions.data ?? []).map(
+    (s) => s.duration_seconds ?? 0
+  );
+  return computeOverview(events, durations);
+}
+function buildSeries(events, days, now = /* @__PURE__ */ new Date()) {
+  const byDay = /* @__PURE__ */ new Map();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 864e5);
+    const date = d.toISOString().slice(0, 10);
+    byDay.set(date, { date, pageViews: 0, events: 0, sessions: 0, _sessions: /* @__PURE__ */ new Set() });
+  }
+  for (const e of events) {
+    const row = byDay.get(e.created_at.slice(0, 10));
+    if (!row) continue;
+    row.events += 1;
+    if (e.event_name === "page_view") row.pageViews += 1;
+    if (e.session_id) row._sessions.add(e.session_id);
+  }
+  return [...byDay.values()].map(({ _sessions, ...r }) => ({ ...r, sessions: _sessions.size }));
+}
+function buildTopPages(events, limit = 15) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const e of events) {
+    if (e.event_name !== "page_view" || !e.page) continue;
+    counts.set(e.page, (counts.get(e.page) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([page, views]) => ({ page, views })).sort((a, b) => b.views - a.views).slice(0, limit);
+}
+function buildTopEvents(events, limit = 20) {
+  const counts = /* @__PURE__ */ new Map();
+  for (const e of events) {
+    if (e.event_name === "page_view") continue;
+    counts.set(e.event_name, (counts.get(e.event_name) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count).slice(0, limit);
+}
+function buildFunnels(events) {
+  const perSession = /* @__PURE__ */ new Map();
+  for (const e of events) {
+    if (!e.session_id) continue;
+    if (!perSession.has(e.session_id)) perSession.set(e.session_id, []);
+    perSession.get(e.session_id).push({ event: e.event_name, at: e.created_at });
+  }
+  return FUNNELS.map((funnel) => {
+    let reached = /* @__PURE__ */ new Set();
+    const steps = [];
+    funnel.steps.forEach((step, idx) => {
+      const next = /* @__PURE__ */ new Set();
+      for (const [sessionId, eventsList] of perSession) {
+        if (idx === 0) {
+          if (eventsList.some((e) => e.event === step)) next.add(sessionId);
+          continue;
+        }
+        const prevIdx = eventsList.findIndex((e) => e.event === funnel.steps[idx - 1]);
+        if (prevIdx === -1) continue;
+        if (eventsList.slice(prevIdx).some((e) => e.event === step)) next.add(sessionId);
+      }
+      const conversion = idx === 0 || reached.size === 0 ? null : next.size / reached.size;
+      reached = next;
+      steps.push({ event: step, sessions: reached.size, conversion });
+    });
+    return { name: funnel.name, steps };
+  });
+}
+async function buildSummary(supabase, days) {
+  const since = daysAgoISO(days);
+  const [events, sessions] = await Promise.all([
+    fetchEvents(supabase, days),
+    supabase.from("sessions").select("duration_seconds").gte("last_seen_at", since)
+  ]);
+  const durations = (sessions.data ?? []).map(
+    (s) => s.duration_seconds ?? 0
+  );
+  return {
+    overview: computeOverview(events, durations),
+    series: buildSeries(events, days),
+    topPages: buildTopPages(events),
+    topEvents: buildTopEvents(events),
+    funnels: buildFunnels(events)
+  };
+}
+
+// server/routes/analytics.ts
 var analyticsRouter = Router3();
 analyticsRouter.post("/", async (req, res) => {
   try {
@@ -1199,40 +1317,10 @@ analyticsRouter.post("/", async (req, res) => {
 });
 var adminAnalyticsRouter = Router3();
 adminAnalyticsRouter.use(requireAdmin);
-var FUNNELS = [
-  { name: "Discovery \u2192 Answer", steps: ["search_performed", "question_viewed", "answer_revealed"] },
-  { name: "Upload Flow", steps: ["upload_dialog_opened", "upload_submitted"] }
-];
-function daysAgoISO(days) {
-  return new Date(Date.now() - days * 864e5).toISOString();
-}
-async function fetchEvents(days) {
-  const supabase = createServerSupabase();
-  const { data, error } = await supabase.from("events").select("id, session_id, user_id, event_name, page, created_at").gte("created_at", daysAgoISO(days)).order("created_at", { ascending: true });
-  if (error) throw error;
-  return data ?? [];
-}
 adminAnalyticsRouter.get("/overview", async (req, res) => {
   try {
     const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
-    const supabase = createServerSupabase();
-    const since = daysAgoISO(days);
-    const [events, sessions] = await Promise.all([
-      fetchEvents(days),
-      supabase.from("sessions").select("duration_seconds").gte("last_seen_at", since)
-    ]);
-    const pageViews = events.filter((e) => e.event_name === "page_view").length;
-    const sessionIds = new Set(events.map((e) => e.session_id).filter(Boolean));
-    const userIds = new Set(events.map((e) => e.user_id).filter(Boolean));
-    const durations = (sessions.data ?? []).map((s) => s.duration_seconds ?? 0).filter((d) => d > 0);
-    const avgSessionDuration = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
-    res.json({
-      sessions: sessionIds.size,
-      pageViews,
-      uniqueUsers: userIds.size,
-      avgSessionDuration,
-      totalEvents: events.length
-    });
+    res.json(await fetchOverview(createServerSupabase(), days));
   } catch (error) {
     console.error("Error loading analytics overview:", error);
     res.status(500).json({ error: "Failed to load analytics" });
@@ -1241,23 +1329,8 @@ adminAnalyticsRouter.get("/overview", async (req, res) => {
 adminAnalyticsRouter.get("/series", async (req, res) => {
   try {
     const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
-    const events = await fetchEvents(days);
-    const byDay = /* @__PURE__ */ new Map();
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 864e5);
-      byDay.set(d.toISOString().slice(0, 10), { date: d.toISOString().slice(0, 10), pageViews: 0, events: 0, sessions: /* @__PURE__ */ new Set() });
-    }
-    for (const e of events) {
-      const day = e.created_at.slice(0, 10);
-      const row = byDay.get(day);
-      if (!row) continue;
-      row.events += 1;
-      if (e.event_name === "page_view") row.pageViews += 1;
-      if (e.session_id) row.sessions.add(e.session_id);
-    }
-    res.json(
-      [...byDay.values()].map((r) => ({ date: r.date, pageViews: r.pageViews, events: r.events, sessions: r.sessions.size }))
-    );
+    const events = await fetchEvents(createServerSupabase(), days);
+    res.json(buildSeries(events, days));
   } catch (error) {
     console.error("Error loading analytics series:", error);
     res.status(500).json({ error: "Failed to load analytics" });
@@ -1266,15 +1339,8 @@ adminAnalyticsRouter.get("/series", async (req, res) => {
 adminAnalyticsRouter.get("/pages", async (req, res) => {
   try {
     const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
-    const events = await fetchEvents(days);
-    const counts = /* @__PURE__ */ new Map();
-    for (const e of events) {
-      if (e.event_name !== "page_view" || !e.page) continue;
-      counts.set(e.page, (counts.get(e.page) ?? 0) + 1);
-    }
-    res.json(
-      [...counts.entries()].map(([page, views]) => ({ page, views })).sort((a, b) => b.views - a.views).slice(0, 15)
-    );
+    const events = await fetchEvents(createServerSupabase(), days);
+    res.json(buildTopPages(events));
   } catch (error) {
     console.error("Error loading analytics pages:", error);
     res.status(500).json({ error: "Failed to load analytics" });
@@ -1283,15 +1349,8 @@ adminAnalyticsRouter.get("/pages", async (req, res) => {
 adminAnalyticsRouter.get("/events", async (req, res) => {
   try {
     const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
-    const events = await fetchEvents(days);
-    const counts = /* @__PURE__ */ new Map();
-    for (const e of events) {
-      if (e.event_name === "page_view") continue;
-      counts.set(e.event_name, (counts.get(e.event_name) ?? 0) + 1);
-    }
-    res.json(
-      [...counts.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count).slice(0, 20)
-    );
+    const events = await fetchEvents(createServerSupabase(), days);
+    res.json(buildTopEvents(events));
   } catch (error) {
     console.error("Error loading analytics events:", error);
     res.status(500).json({ error: "Failed to load analytics" });
@@ -1300,34 +1359,8 @@ adminAnalyticsRouter.get("/events", async (req, res) => {
 adminAnalyticsRouter.get("/funnels", async (req, res) => {
   try {
     const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
-    const events = await fetchEvents(days);
-    const perSession = /* @__PURE__ */ new Map();
-    for (const e of events) {
-      if (!e.session_id) continue;
-      if (!perSession.has(e.session_id)) perSession.set(e.session_id, []);
-      perSession.get(e.session_id).push({ event: e.event_name, at: e.created_at });
-    }
-    const result = FUNNELS.map((funnel) => {
-      let reached = /* @__PURE__ */ new Set();
-      const steps = [];
-      funnel.steps.forEach((step, idx) => {
-        const next = /* @__PURE__ */ new Set();
-        for (const [sessionId, eventsList] of perSession) {
-          if (idx === 0) {
-            if (eventsList.some((e) => e.event === step)) next.add(sessionId);
-            continue;
-          }
-          const prevIdx = eventsList.findIndex((e) => e.event === funnel.steps[idx - 1]);
-          if (prevIdx === -1) continue;
-          if (eventsList.slice(prevIdx).some((e) => e.event === step)) next.add(sessionId);
-        }
-        const conversion = idx === 0 || reached.size === 0 ? null : next.size / reached.size;
-        reached = next;
-        steps.push({ event: step, sessions: reached.size, conversion });
-      });
-      return { name: funnel.name, steps };
-    });
-    res.json(result);
+    const events = await fetchEvents(createServerSupabase(), days);
+    res.json(buildFunnels(events));
   } catch (error) {
     console.error("Error loading analytics funnels:", error);
     res.status(500).json({ error: "Failed to load analytics" });
@@ -1347,12 +1380,12 @@ feedbackRouter.get("/", async (req, res) => {
     if (category) query = query.eq("category", category);
     const { data: items, error } = await query;
     if (error) throw error;
-    const rows = items ?? [];
-    if (rows.length === 0) {
+    const rows2 = items ?? [];
+    if (rows2.length === 0) {
       res.json({ items: [] });
       return;
     }
-    const ids = rows.map((r) => r.id);
+    const ids = rows2.map((r) => r.id);
     const { data: votes, error: votesError } = await supabase.from("feedback_votes").select("item_id, user_id").in("item_id", ids);
     if (votesError) throw votesError;
     const counts = /* @__PURE__ */ new Map();
@@ -1370,7 +1403,7 @@ feedbackRouter.get("/", async (req, res) => {
         myVotes = new Set((mine ?? []).map((v) => v.item_id));
       }
     }
-    const itemsWithVotes = rows.map((item) => ({
+    const itemsWithVotes = rows2.map((item) => ({
       ...item,
       votes: counts.get(item.id) ?? 0,
       myVote: myVotes.has(item.id)
@@ -1965,12 +1998,12 @@ paymentsRouter.post("/initiate", requireAuth, async (req, res) => {
       status: "pending",
       created_at: (/* @__PURE__ */ new Date()).toISOString()
     });
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9002}`;
+    const appUrl2 = process.env.NEXT_PUBLIC_APP_URL || `http://localhost:${process.env.PORT || 9002}`;
     const paystackResponse = await initializePayment({
       email: user.email,
       amount: plan.priceNaira,
       reference,
-      callbackUrl: `${appUrl}/billing?payment=success&ref=${reference}`,
+      callbackUrl: `${appUrl2}/billing?payment=success&ref=${reference}`,
       metadata: {
         user_id: user.id,
         tier,
@@ -2513,6 +2546,191 @@ lecturerPhotosRouter.post("/:id/upvote", requireAuth, async (req, res) => {
   }
 });
 
+// server/routes/cron.ts
+init_supabase_server();
+import { Router as Router14 } from "express";
+
+// src/lib/digest-email.ts
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function fmtDuration(seconds) {
+  if (!seconds) return "\u2014";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m ? `${m}m ${s}s` : `${s}s`;
+}
+function eventLabel(event) {
+  return event.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+function stat(label, value) {
+  return `<td width="33%" style="padding:6px;"><div style="background:#f8fafc;border-radius:8px;padding:14px;text-align:center;font-family:Arial,sans-serif;">
+    <div style="font-size:22px;font-weight:bold;color:#0f172a;">${esc(value)}</div>
+    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">${esc(label)}</div>
+  </div></td>`;
+}
+function rows(items) {
+  return items.map(
+    ([left, right], i) => `<tr><td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;font-family:Arial,sans-serif;font-size:13px;color:#0f172a;">${i + 1}. ${esc(left)}
+        <span style="float:right;color:#7c3aed;font-weight:bold;">${esc(right)}</span></td></tr>`
+  ).join("");
+}
+function section(title, body) {
+  return `<h3 style="font-size:14px;color:#0f172a;margin:20px 0 8px;font-family:Arial,sans-serif;">${esc(title)}</h3>
+  <table width="100%" style="background:#f8fafc;border-radius:8px;border-collapse:collapse;">${body}</table>`;
+}
+function renderDigestHtml(p) {
+  const { overview, topPages, topEvents, funnels } = p.summary;
+  const pagesBody = rows(topPages.slice(0, 5).map((x) => [x.page, `${x.views} views`]));
+  const eventsBody = rows(topEvents.slice(0, 5).map((x) => [eventLabel(x.event), String(x.count)]));
+  const funnelsBody = funnels.map((f) => {
+    const steps = f.steps.map((s, i) => {
+      const pct = s.conversion === null ? "\u2014" : `${Math.round(s.conversion * 100)}%`;
+      const color = s.conversion !== null && s.conversion < 0.5 ? "#dc2626" : "#16a34a";
+      return `${i > 0 ? " \u2192 " : ""}${esc(eventLabel(s.event))} <strong style="color:${color}">${pct}</strong>`;
+    }).join("");
+    return `<tr><td style="padding:8px 12px;font-family:Arial,sans-serif;font-size:13px;color:#334155;"><strong>${esc(f.name)}</strong><br/>${steps}</td></tr>`;
+  }).join("");
+  return `<div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;">
+  <div style="background:#7c3aed;border-radius:12px 12px 0 0;padding:20px 24px;">
+    <div style="color:#fff;font-size:18px;font-weight:bold;">JackPass Weekly Digest</div>
+    <div style="color:#e9d5ff;font-size:13px;margin-top:4px;">${esc(p.rangeStart)} \u2192 ${esc(p.rangeEnd)}</div>
+  </div>
+  <div style="background:#fff;border-radius:0 0 12px 12px;padding:16px 12px 24px;">
+    <table width="100%" style="border-collapse:collapse;"><tr>
+      ${stat("Sessions", String(overview.sessions))}${stat("Page Views", String(overview.pageViews))}${stat("Users", String(overview.uniqueUsers))}
+    </tr><tr>
+      ${stat("Avg Session", fmtDuration(overview.avgSessionDuration))}${stat("Total Events", String(overview.totalEvents))}<td width="33%">&nbsp;</td>
+    </tr></table>
+    ${topPages.length ? section("Top Pages", pagesBody) : ""}
+    ${topEvents.length ? section("Top Features", eventsBody) : ""}
+    ${funnels.length ? section("Funnels", funnelsBody) : ""}
+    <a href="${esc(p.appUrl)}/admin/analytics" style="display:block;margin:24px auto 0;width:220px;text-align:center;background:#7c3aed;color:#fff;text-decoration:none;font-size:14px;font-weight:bold;padding:11px 0;border-radius:8px;">View full analytics \u2192</a>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:11px;">Weekly usage summary \xB7 JackPass</p>
+</div>`;
+}
+function renderDigestText(p) {
+  const o = p.summary.overview;
+  const lines = [
+    `JackPass Weekly Digest \u2014 ${p.rangeStart} to ${p.rangeEnd}`,
+    "",
+    `Sessions: ${o.sessions} | Page views: ${o.pageViews} | Users: ${o.uniqueUsers}`,
+    `Avg session: ${fmtDuration(o.avgSessionDuration)} | Total events: ${o.totalEvents}`
+  ];
+  if (p.summary.topPages.length) {
+    lines.push("", "Top pages:");
+    p.summary.topPages.slice(0, 5).forEach((x, i) => lines.push(`  ${i + 1}. ${x.page} \u2014 ${x.views} views`));
+  }
+  if (p.summary.topEvents.length) {
+    lines.push("", "Top features:");
+    p.summary.topEvents.slice(0, 5).forEach((x, i) => lines.push(`  ${i + 1}. ${eventLabel(x.event)} \u2014 ${x.count}`));
+  }
+  lines.push("", `Full analytics: ${p.appUrl}/admin/analytics`);
+  return lines.join("\n");
+}
+
+// server/routes/cron.ts
+init_middleware();
+var RESEND_ENDPOINT = "https://api.resend.com/emails";
+function appUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL || "https://jackpass-vite.vercel.app").replace(/\/$/, "");
+}
+function weekWindow() {
+  const end = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const start = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
+  return { start, end, days: 7 };
+}
+function subjectFor(start, end) {
+  return `JackPass weekly digest \u2014 ${start} to ${end}`;
+}
+async function sendDigest({ to, start, end, days }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("RESEND_API_KEY is not configured");
+  const summary = await buildSummary(createServerSupabase(), days);
+  const payload = { summary, rangeStart: start, rangeEnd: end, appUrl: appUrl() };
+  const res = await fetch(RESEND_ENDPOINT, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: process.env.DIGEST_FROM_EMAIL || "JackPass <digest@jackpass.app>",
+      to,
+      subject: subjectFor(start, end),
+      html: renderDigestHtml(payload),
+      text: renderDigestText(payload)
+    })
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = typeof body === "object" && body !== null ? JSON.stringify(body) : "";
+    throw new Error(`Resend failed (${res.status}): ${detail.slice(0, 300)}`);
+  }
+  const id = body?.id ?? "unknown";
+  console.log(`Digest email sent to ${to.length} recipient(s), id=${id}, window=${start}..${end}`);
+  return id;
+}
+var cronRouter = Router14();
+cronRouter.post("/weekly-digest", async (req, res) => {
+  const auth = req.headers.authorization || "";
+  const expected = `Bearer ${process.env.CRON_SECRET || ""}`;
+  if (!process.env.CRON_SECRET || auth !== expected) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const supabase = createServerSupabase();
+    const { start, end, days } = weekWindow();
+    const weekKey = `${start}_${end}`;
+    const { data: existing } = await supabase.from("digest_sends").select("id").eq("week_key", weekKey).maybeSingle();
+    if (existing) {
+      res.json({ ok: true, skipped: true, reason: "already sent", weekKey });
+      return;
+    }
+    const { data: profiles } = await supabase.from("user_profiles").select("id").eq("is_admin", true);
+    const adminIds = (profiles ?? []).map((p) => p.id);
+    const to = [];
+    const { createClient: createClient3 } = await import("@supabase/supabase-js");
+    const admin = createClient3(
+      process.env.NEXT_PUBLIC_SUPABASE_URL.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/$/, ""),
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    const { data: usersList } = await admin.auth.admin.listUsers({ perPage: 500 });
+    for (const u of usersList?.users ?? []) {
+      if (adminIds.includes(u.id) && u.email) to.push(u.email);
+    }
+    if (to.length === 0) {
+      res.json({ ok: true, skipped: true, reason: "no admin recipients" });
+      return;
+    }
+    const resendId = await sendDigest({ to, start, end, days });
+    await supabase.from("digest_sends").insert({ week_key: weekKey, recipients: to.length, resend_id: resendId });
+    res.json({ ok: true, sent: to.length, weekKey });
+  } catch (error) {
+    console.error("Weekly digest failed:", error);
+    res.status(500).json({ error: error.message || "Digest failed" });
+  }
+});
+var adminDigestRouter = Router14();
+adminDigestRouter.use(requireAdmin);
+adminDigestRouter.post("/send", async (req, res) => {
+  try {
+    const days = Math.min(90, Math.max(1, Number(req.query.days) || 7));
+    const toParam = typeof req.query.to === "string" ? req.query.to.trim() : "";
+    const start = new Date(Date.now() - (days - 1) * 864e5).toISOString().slice(0, 10);
+    const end = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const to = toParam ? [toParam] : [res.locals.user?.email || ""].filter(Boolean);
+    if (to.length === 0) {
+      res.status(400).json({ error: "No recipient email available" });
+      return;
+    }
+    const resendId = await sendDigest({ to, start, end, days });
+    res.json({ ok: true, to, window: { start, end }, resendId });
+  } catch (error) {
+    console.error("Digest test send failed:", error);
+    res.status(500).json({ error: error.message || "Digest send failed" });
+  }
+});
+
 // api/_server.ts
 var app = express();
 app.disable("x-powered-by");
@@ -2542,6 +2760,8 @@ app.use("/api/lecturers", lecturersRouter);
 app.use("/api/lecturer-reviews", lecturerReviewsRouter);
 app.use("/api/lecturer-flags", lecturerFlagsRouter);
 app.use("/api/lecturer-photos", lecturerPhotosRouter);
+app.use("/api/cron", cronRouter);
+app.use("/api/admin/digest", adminDigestRouter);
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "Not found" });
 });

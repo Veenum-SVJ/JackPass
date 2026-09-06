@@ -22,6 +22,7 @@ import { lecturersRouter } from '../server/routes/lecturers';
 import { lecturerReviewsRouter } from '../server/routes/lecturer-reviews';
 import { lecturerFlagsRouter } from '../server/routes/lecturer-flags';
 import { lecturerPhotosRouter } from '../server/routes/lecturer-photos';
+import { cronRouter, adminDigestRouter } from '../server/routes/cron';
 
 const app = express();
 app.disable('x-powered-by');
@@ -56,6 +57,8 @@ app.use('/api/lecturers', lecturersRouter);
 app.use('/api/lecturer-reviews', lecturerReviewsRouter);
 app.use('/api/lecturer-flags', lecturerFlagsRouter);
 app.use('/api/lecturer-photos', lecturerPhotosRouter);
+app.use('/api/cron', cronRouter);
+app.use('/api/admin/digest', adminDigestRouter);
 
 // 404 for unmatched API routes
 app.use('/api', (_req, res) => {

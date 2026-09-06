@@ -23,6 +23,7 @@ import { lecturersRouter } from './routes/lecturers';
 import { lecturerReviewsRouter } from './routes/lecturer-reviews';
 import { lecturerFlagsRouter } from './routes/lecturer-flags';
 import { lecturerPhotosRouter } from './routes/lecturer-photos';
+import { cronRouter, adminDigestRouter } from './routes/cron';
 
 const app = express();
 app.disable('x-powered-by');
@@ -56,6 +57,8 @@ app.use('/api/lecturers', lecturersRouter);
 app.use('/api/lecturer-reviews', lecturerReviewsRouter);
 app.use('/api/lecturer-flags', lecturerFlagsRouter);
 app.use('/api/lecturer-photos', lecturerPhotosRouter);
+app.use('/api/cron', cronRouter);
+app.use('/api/admin/digest', adminDigestRouter);
 
 // ── Static SPA (production) ───────────────────────────────────────────────────
 // In Vercel, the SPA is served from dist/ by the static hosting layer.
