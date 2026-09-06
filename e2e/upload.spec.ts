@@ -15,7 +15,7 @@ test.describe('upload flow', () => {
     await installMocks(page);
     await page.goto('/');
 
-    await page.getByRole('button', { name: 'Upload Past Question' }).click();
+    await page.getByRole('button', { name: 'Upload Exam Paper' }).click();
 
     await expect(page.getByText('Authentication Required', { exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/login$/);
@@ -25,10 +25,10 @@ test.describe('upload flow', () => {
     await installMocks(page);
     await loginAs(page);
 
-    await page.getByRole('button', { name: 'Upload Past Question' }).click();
+    await page.getByRole('button', { name: 'Upload Exam Paper' }).click();
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('heading', { name: 'Upload Past Question(s)' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Upload Exam Paper' })).toBeVisible();
     await expect(dialog.getByText('Upload File(s)')).toBeVisible();
     await expect(dialog.getByText('Import from Link')).toBeVisible();
   });
@@ -37,7 +37,7 @@ test.describe('upload flow', () => {
     await installMocks(page);
     await loginAs(page);
 
-    await page.getByRole('button', { name: 'Upload Past Question' }).click();
+    await page.getByRole('button', { name: 'Upload Exam Paper' }).click();
     const dialog = page.getByRole('dialog');
 
     await dialog.getByRole('button', { name: 'Submit for Review' }).click();
@@ -50,7 +50,7 @@ test.describe('upload flow', () => {
     await installMocks(page);
     await loginAs(page);
 
-    await page.getByRole('button', { name: 'Upload Past Question' }).click();
+    await page.getByRole('button', { name: 'Upload Exam Paper' }).click();
     const dialog = page.getByRole('dialog');
 
     // Select a file → triggers the mocked AI document processing
@@ -62,7 +62,7 @@ test.describe('upload flow', () => {
 
     // AI extraction (mocked) pre-fills the metadata fields (toast renders in
     // the root toaster, outside the dialog)
-    await expect(page.getByText('Metadata Extracted!', { exact: true })).toBeVisible();
+    await expect(page.getByText('Image Scanned!', { exact: true })).toBeVisible();
 
     const submit = dialog.getByRole('button', { name: 'Submit for Review' });
     await expect(submit).toBeEnabled();
@@ -77,7 +77,7 @@ test.describe('upload flow', () => {
     await installMocks(page);
     await loginAs(page);
 
-    await page.getByRole('button', { name: 'Upload Past Question' }).click();
+    await page.getByRole('button', { name: 'Upload Exam Paper' }).click();
     const dialog = page.getByRole('dialog');
 
     await dialog.getByText('Import from Link').click();

@@ -180,12 +180,22 @@ export async function installMocks(page: Page, options: MockOptions = {}) {
   );
 
   // Admin endpoints
+  // Server-side admin check (bypasses RLS) — called by AuthContext after login
+  await page.route('**/api/admin/me', (route) =>
+    route.fulfill({ json: { isAdmin } })
+  );
   await page.route('**/api/admin/questions*', (route) => {
     const url = new URL(route.request().url());
     if (url.searchParams.get('institutions') === 'true') {
       return route.fulfill({ json: ['University of Lagos', 'University of Ibadan'] });
     }
-    return route.fulfill({ json: adminQuestions });
+    // Respect the status filter the page sends (defaults to "pending")
+    const status = url.searchParams.get('status');
+    const filtered =
+      status && status !== 'all'
+        ? adminQuestions.filter((q) => q.status === status)
+        : adminQuestions;
+    return route.fulfill({ json: filtered });
   });
   await page.route('**/api/admin/questions/*/*', (route) =>
     route.fulfill({ json: { success: true } })
@@ -207,7 +217,8 @@ export async function installMocks(page: Page, options: MockOptions = {}) {
       json: {
         institutionName: 'University of Lagos',
         courseName: 'MTH 101',
-        examYear: 2023,
+        courseCode: 'MTH 101',
+        academicSession: '2023/2024',
         semester: 'First',
         fullContent: 'Mock extracted question content.',
       },

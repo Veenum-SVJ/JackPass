@@ -106,7 +106,19 @@ test.describe('visual regression', () => {
       await prepare(page, theme);
       await installMocks(page, { isAdmin: true });
       await loginAs(page);
-      await snapshotPage(page, '/admin/questions', theme, 'admin-questions');
+      // The moderation grid loads async — wait for content before capturing so
+      // the snapshot is deterministic (a blind 150ms wait is flaky here).
+      await page.goto('/admin/questions');
+      await expect(page.getByText('Organic Chemistry Reactions')).toBeVisible();
+      await expect(page.getByText('92%', { exact: true }).first()).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(200);
+      await expect(page).toHaveScreenshot(`admin-questions-${theme}.png`, {
+        animations: 'disabled',
+        caret: 'hide',
+        maxDiffPixelRatio: 0.01,
+        threshold: 0.2,
+      });
     });
 
     test(`question not found — ${theme}`, async ({ page }) => {

@@ -15,7 +15,7 @@ test.describe('admin route guards', () => {
     await page.goto('/admin/questions');
 
     await expect(page).toHaveURL(/\/admin\/login$/);
-    await expect(page.getByText('Sign in with admin credentials.')).toBeVisible();
+    await expect(page.getByText('Sign in with your JackPass account.')).toBeVisible();
   });
 
   test('blocks non-admin users with an access denied toast', async ({ page }) => {
@@ -34,9 +34,9 @@ test.describe('admin route guards', () => {
 
     await page.goto('/admin/questions');
 
-    await expect(page.getByRole('heading', { name: 'Question Moderation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Exam Paper Moderation' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Moderation' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Exam Papers' })).toBeVisible();
   });
 });
 
@@ -46,14 +46,18 @@ test.describe('question moderation', () => {
     await loginAs(page);
     await page.goto('/admin/questions');
 
+    // Default status filter is "pending" → only the pending question renders
     await expect(page.getByText('Organic Chemistry Reactions')).toBeVisible();
-    await expect(page.getByText('Thermodynamics Laws')).toBeVisible();
-    // Status badges for the seeded questions
-    // Status badge (the status-filter <option> also has this text but is hidden)
+    await expect(page.getByText('Thermodynamics Laws')).toBeHidden();
+    // Status badge on the pending card (the status-filter <option> also has
+    // this text but is hidden, so match the badge div directly)
     await expect(page.locator('div', { hasText: /^Pending$/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Status: Approved' })).toBeVisible();
     // AI confidence from the seeded ai_extracted_data
-    await expect(page.locator('div', { hasText: /^92%$/ })).toBeVisible();
+    await expect(page.getByText('92%', { exact: true }).first()).toBeVisible();
+
+    // Switch the filter to all statuses → both seeded questions render
+    await page.getByRole('combobox').first().selectOption('all');
+    await expect(page.getByText('Thermodynamics Laws')).toBeVisible();
     // Institution filter populated from the mocked endpoint (options in a
     // closed <select> are hidden, so assert presence rather than visibility)
     await expect(page.getByRole('option', { name: 'University of Lagos' })).toHaveCount(1);
@@ -68,7 +72,7 @@ test.describe('question moderation', () => {
     // Only one seeded question is pending → exactly one Approve button
     await page.getByRole('button', { name: 'Approve', exact: true }).click();
 
-    await expect(page.getByText('Question Approved', { exact: true })).toBeVisible();
+    await expect(page.getByText('Exam Paper Approved', { exact: true })).toBeVisible();
   });
 
   test('rejects a pending question', async ({ page }) => {
@@ -78,6 +82,6 @@ test.describe('question moderation', () => {
 
     await page.getByRole('button', { name: 'Reject', exact: true }).click();
 
-    await expect(page.getByText('Question Rejected', { exact: true })).toBeVisible();
+    await expect(page.getByText('Exam Paper Rejected', { exact: true })).toBeVisible();
   });
 });
