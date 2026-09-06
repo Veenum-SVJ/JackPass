@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Question } from '@/lib/types';
+import { track } from '@/lib/analytics';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Eye, EyeOff, ArrowLeft, ArrowRight, Lightbulb, ExternalLink, GraduationCap, Star, BookOpen } from 'lucide-react';
@@ -8,6 +9,13 @@ import { cn } from '@/lib/utils';
 
 export default function QuestionView({ question }: { question: Question }) {
   const [showAnswer, setShowAnswer] = useState(false);
+
+  // Usage analytics: record when a student reveals the model answer
+  useEffect(() => {
+    if (showAnswer) {
+      track('answer_revealed');
+    }
+  }, [showAnswer]);
 
   // Prev/next navigation only makes sense for numeric legacy ids.
   // New questions use UUIDs, so hide the controls in that case.

@@ -9,12 +9,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
+import { track } from '@/lib/analytics';
 
 export default function QuestionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: question, isLoading, isError } = useQuestion(id);
   const [relatedQuestions, setRelatedQuestions] = useState<Question[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
+
+  // Usage analytics: a student viewed a question
+  useEffect(() => {
+    if (question) {
+      track('question_viewed');
+    }
+  }, [question]);
 
   useEffect(() => {
     if (!question) return;

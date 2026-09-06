@@ -18,6 +18,7 @@ import {
 } from '@/hooks/useAdminQuestions';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { track } from '@/lib/analytics';
 
 const PAGE_SIZE = 12;
 
@@ -161,6 +162,7 @@ export default function AdminQuestionsPage() {
   const handleStatusChange = async (id: string, action: 'approve' | 'reject') => {
     try {
       await moderateQuestion.mutateAsync({ id, action });
+      track(action === 'approve' ? 'admin_approved' : 'admin_rejected');
       toast({
         title: action === 'approve' ? 'Exam Paper Approved' : 'Exam Paper Rejected',
         description: `The exam paper has been ${action}d successfully.`,
@@ -209,6 +211,7 @@ export default function AdminQuestionsPage() {
     const wasCancelled = bulkGenCancelled.current || bulkGenAbort.current.signal.aborted;
     bulkGenAbort.current = null;
     setBulkGenProgress(null);
+    track('answer_generated', { count: done });
     const genElapsed = ((Date.now() - bulkGenStartRef.current) / 1000).toFixed(0);
     toast({
       title: wasCancelled ? 'Generation Cancelled' : 'Bulk Generation Complete',
@@ -224,6 +227,7 @@ export default function AdminQuestionsPage() {
 
     try {
       await bulkModerate.mutateAsync({ ids, action });
+      track(action === 'approve' ? 'admin_bulk_approved' : 'admin_bulk_rejected', { count: ids.length });
       toast({
         title: action === 'approve' ? 'Exam Papers Approved' : 'Exam Papers Rejected',
         description: `${ids.length} exam paper${ids.length > 1 ? 's' : ''} ${action === 'approve' ? 'approved' : 'rejected'} successfully.`,
@@ -712,10 +716,11 @@ export default function AdminQuestionsPage() {
                 }}
                 onReprocess={() => {
                   setReprocessingId(question.id);
+                  track('reprocess_started');
                   reprocessQuestion.mutate(
                     { id: question.id },
                     {
-                      onSuccess: (data) => { setReprocessingId(null); const t = data?.timing; toast({ title: 'Re-process Complete', description: t ? `File: ${(t.fetchFile / 1000).toFixed(1)}s · AI: ${(t.aiProcessing / 1000).toFixed(1)}s · Save: ${(t.saveResults / 1000).toFixed(1)}s · Total: ${(t.total / 1000).toFixed(1)}s` : 'Gemini Vision has re-extracted the text from the original image.' }); },
+                      onSuccess: (data) => { setReprocessingId(null); track('reprocess_completed'); const t = data?.timing; toast({ title: 'Re-process Complete', description: t ? `File: ${(t.fetchFile / 1000).toFixed(1)}s · AI: ${(t.aiProcessing / 1000).toFixed(1)}s · Save: ${(t.saveResults / 1000).toFixed(1)}s · Total: ${(t.total / 1000).toFixed(1)}s` : 'Gemini Vision has re-extracted the text from the original image.' }); },
                       onError: (err: Error) => { setReprocessingId(null); toast({ variant: 'destructive', title: 'Re-process Failed', description: err.message }); },
                     }
                   );

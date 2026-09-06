@@ -62,6 +62,36 @@ adminBaseRouter.get('/stats', requireAdmin, async (_req, res) => {
   }
 });
 
+/**
+ * PATCH /api/admin/feedback/:id/status
+ * Update the status of a feedback item (admin only).
+ */
+adminBaseRouter.patch('/feedback/:id/status', requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const { status } = req.body ?? {};
+    const allowed = ['open', 'planned', 'in-progress', 'done'];
+    if (!allowed.includes(status)) {
+      res.status(400).json({ error: 'Invalid status. Must be one of: ' + allowed.join(', ') });
+      return;
+    }
+
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase
+      .from('feedback_items')
+      .update({ status })
+      .eq('id', id)
+      .select('id, status')
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, item: data });
+  } catch (error: any) {
+    console.error('Error updating feedback status:', error);
+    res.status(500).json({ error: error.message || 'Failed to update feedback status' });
+  }
+});
+
 // ── Question moderation routes (mounted at /api/admin/questions) ──
 export const adminRouter = Router();
 

@@ -9,7 +9,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, ArrowUp, ArrowDown, MessageSquare, MessagesSquare, GraduationCap, FileQuestion, Lightbulb, Users, Landmark, SearchX } from 'lucide-react';
+import FeedbackBoard from '@/components/feedback/FeedbackBoard';
 import { Link } from 'react-router-dom';
 import { institutions } from '@/lib/data';
 import type { Course } from '@/lib/types';
@@ -138,7 +140,14 @@ export default function CommunityPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 px-4">
+      <div className="px-4">
+        <Tabs defaultValue="discussions">
+          <TabsList className="mb-6 flex-wrap h-auto">
+            <TabsTrigger value="discussions">Discussions</TabsTrigger>
+            <TabsTrigger value="feedback">Feedback Board</TabsTrigger>
+          </TabsList>
+          <TabsContent value="discussions">
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-9">
           <div className="bg-card p-4 rounded-lg border shadow-sm mb-8">
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-center">
@@ -258,7 +267,13 @@ export default function CommunityPage() {
             </CardContent>
           </Card>
         </aside>
-      </section>
+        </section>
+        </TabsContent>
+        <TabsContent value="feedback">
+          <FeedbackBoard />
+        </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

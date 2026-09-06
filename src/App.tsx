@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { initAnalytics, track } from './lib/analytics';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './components/common/ThemeProvider';
 import { Toaster } from './components/ui/toaster';
@@ -26,11 +27,21 @@ const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminQuestions = lazy(() => import('./pages/admin/Questions'));
 const AdminUsers = lazy(() => import('./pages/admin/Users'));
+const AdminAnalytics = lazy(() => import('./pages/admin/Analytics'));
 const AdminLogin = lazy(() => import('./pages/admin/Login'));
 
 export default function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin') && location.pathname !== '/admin/login';
+
+  // Usage analytics: session lifecycle + page-view tracking
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+
+  useEffect(() => {
+    track('page_view', { page: location.pathname });
+  }, [location.pathname]);
 
   return (
     <AuthProvider>
@@ -68,6 +79,7 @@ export default function App() {
                   <Route path="dashboard" element={<AdminDashboard />} />
                   <Route path="questions" element={<AdminQuestions />} />
                   <Route path="users" element={<AdminUsers />} />
+                  <Route path="analytics" element={<AdminAnalytics />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

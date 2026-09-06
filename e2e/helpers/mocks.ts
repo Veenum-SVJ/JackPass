@@ -201,6 +201,112 @@ export async function installMocks(page: Page, options: MockOptions = {}) {
     route.fulfill({ json: { success: true } })
   );
 
+  // Analytics (usage tracking + admin analytics)
+  await page.route('**/api/events', (route) =>
+    route.fulfill({ json: { ok: true } })
+  );
+  await page.route('**/api/admin/analytics/overview*', (route) =>
+    route.fulfill({
+      json: { sessions: 120, pageViews: 540, uniqueUsers: 45, avgSessionDuration: 128, totalEvents: 700 },
+    })
+  );
+  await page.route('**/api/admin/analytics/series*', (route) =>
+    route.fulfill({
+      json: [
+        { date: '2026-08-10', pageViews: 12, events: 18, sessions: 6 },
+        { date: '2026-08-11', pageViews: 20, events: 30, sessions: 9 },
+        { date: '2026-08-12', pageViews: 15, events: 22, sessions: 7 },
+      ],
+    })
+  );
+  await page.route('**/api/admin/analytics/pages*', (route) =>
+    route.fulfill({
+      json: [
+        { page: '/library', views: 150 },
+        { page: '/', views: 120 },
+        { page: '/community', views: 60 },
+      ],
+    })
+  );
+  await page.route('**/api/admin/analytics/events*', (route) =>
+    route.fulfill({
+      json: [
+        { event: 'search_performed', count: 42 },
+        { event: 'question_viewed', count: 30 },
+        { event: 'upload_submitted', count: 8 },
+      ],
+    })
+  );
+  await page.route('**/api/admin/analytics/funnels*', (route) =>
+    route.fulfill({
+      json: [
+        {
+          name: 'Upload Flow',
+          steps: [
+            { event: 'upload_dialog_opened', sessions: 20, conversion: null },
+            { event: 'upload_submitted', sessions: 12, conversion: 0.6 },
+          ],
+        },
+      ],
+    })
+  );
+
+  // Feedback board
+  await page.route('**/api/feedback', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({
+        status: 201,
+        json: {
+          item: {
+            id: 'new-item',
+            title: 'Created item',
+            description: null,
+            category: 'General',
+            status: 'open',
+            user_id: null,
+            created_at: new Date().toISOString(),
+            votes: 0,
+            myVote: false,
+          },
+        },
+      });
+    }
+    return route.fulfill({
+      json: {
+        items: [
+          {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            title: 'PDF downloads for past questions',
+            description: 'Let students download exam papers as PDFs.',
+            category: 'General',
+            status: 'open',
+            user_id: null,
+            created_at: '2026-08-01T10:00:00.000Z',
+            votes: 5,
+            myVote: false,
+          },
+          {
+            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            title: 'Dark mode toggle for the library',
+            description: null,
+            category: 'Study Tools',
+            status: 'planned',
+            user_id: null,
+            created_at: '2026-08-02T10:00:00.000Z',
+            votes: 3,
+            myVote: false,
+          },
+        ],
+      },
+    });
+  });
+  await page.route('**/api/feedback/*/vote', (route) =>
+    route.fulfill({ json: { voted: true, votes: 6 } })
+  );
+  await page.route('**/api/admin/feedback/*/status', (route) =>
+    route.fulfill({ json: { success: true, item: { id: 'x', status: 'planned' } } })
+  );
+
   // Upload + AI processing
   await page.route('**/api/upload', (route) =>
     route.fulfill({

@@ -11,6 +11,8 @@ import express from 'express';
 // These compile to JS by Vercel's esbuild and resolve at deploy time.
 import { questionsRouter } from '../server/routes/questions';
 import { adminBaseRouter, adminRouter, adminUsersRouter } from '../server/routes/admin';
+import { analyticsRouter, adminAnalyticsRouter } from '../server/routes/analytics';
+import { feedbackRouter } from '../server/routes/feedback';
 import { uploadRouter } from '../server/routes/upload';
 import { paymentsRouter } from '../server/routes/payments';
 import { usersRouter } from '../server/routes/users';
@@ -42,6 +44,9 @@ app.use('/api/questions', questionsRouter);
 app.use('/api/admin', adminBaseRouter);
 app.use('/api/admin/questions', adminRouter);
 app.use('/api/admin/users', adminUsersRouter);
+app.use('/api/admin/analytics', adminAnalyticsRouter);
+app.use('/api/events', analyticsRouter);
+app.use('/api/feedback', feedbackRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/users', usersRouter);

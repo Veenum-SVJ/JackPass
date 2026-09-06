@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { SearchX, BookOpen, Building2, GraduationCap, Search, ChevronRight } from 'lucide-react';
+import { track } from '@/lib/analytics';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuestions } from '@/hooks/useQuestions';
 import { useToast } from '@/hooks/use-toast';
@@ -107,6 +108,7 @@ export default function Library() {
   const handleSearch = () => {
     setAppliedFilters(filters);
     setView('results');
+    track('search_performed');
   };
 
   const handleBrowseInstitution = (instName: string) => {

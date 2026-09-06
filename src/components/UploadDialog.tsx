@@ -40,6 +40,7 @@ import { useNavigate } from 'react-router-dom';
 import { useProcessDocument, useUploadQuestion } from '@/hooks/useUpload';
 import { compressImage } from '@/lib/compressImage';
 import { fuzzyMatchInstitution } from '@/lib/fuzzyMatch';
+import { track } from '@/lib/analytics';
 
 const fileSchema = z.custom<FileList>()
   .refine((files) => files && files.length > 0, 'At least one file is required.')
@@ -261,6 +262,7 @@ export function UploadDialog() {
         files: data.questionFiles ? Array.from(data.questionFiles) : undefined,
         fileUrl: data.fileUrl || undefined,
       });
+      track('upload_submitted', { files: fileCount || 1 });
 
       toast({
         title: 'Upload Successful!',
@@ -290,6 +292,9 @@ export function UploadDialog() {
   };
 
   const onDialogOpenChange = (open: boolean) => {
+    if (open) {
+      track('upload_dialog_opened');
+    }
     if (!open) {
       form.reset({
         institution: '',

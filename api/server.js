@@ -43,6 +43,79 @@ var init_supabase_server = __esm({
   }
 });
 
+// server/middleware.ts
+var middleware_exports = {};
+__export(middleware_exports, {
+  createUserClient: () => createUserClient,
+  getBearerToken: () => getBearerToken,
+  getUserFromRequest: () => getUserFromRequest,
+  requireAdmin: () => requireAdmin,
+  requireAuth: () => requireAuth
+});
+import { createClient as createClient2 } from "@supabase/supabase-js";
+function getBearerToken(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  return authHeader.substring(7);
+}
+function createUserClient(req) {
+  const token = getBearerToken(req);
+  if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  return createClient2(normalizeSupabaseUrl(SUPABASE_URL), SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } }
+  });
+}
+async function getUserFromRequest(req) {
+  const client = createUserClient(req);
+  if (!client) return null;
+  const { data, error } = await client.auth.getUser();
+  if (error || !data.user) return null;
+  return data.user;
+}
+async function requireAuth(req, res, next) {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    res.locals.user = user;
+    next();
+  } catch (error) {
+    console.error("Auth middleware error:", error);
+    res.status(500).json({ error: "Authentication failed" });
+  }
+}
+async function requireAdmin(req, res, next) {
+  try {
+    const user = await getUserFromRequest(req);
+    if (!user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const admin = await isUserAdmin(user.id);
+    if (!admin) {
+      res.status(403).json({ error: "Forbidden: Admin access required" });
+      return;
+    }
+    res.locals.user = user;
+    next();
+  } catch (error) {
+    console.error("Admin middleware error:", error);
+    res.status(500).json({ error: "Authorization check failed" });
+  }
+}
+var SUPABASE_URL, SUPABASE_ANON_KEY;
+var init_middleware = __esm({
+  "server/middleware.ts"() {
+    "use strict";
+    init_supabase_server();
+    init_supabase_utils();
+    SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  }
+});
+
 // src/ai/genkit.ts
 var genkit_exports = {};
 __export(genkit_exports, {
@@ -563,68 +636,8 @@ questionsRouter.get("/:id", async (req, res) => {
 
 // server/routes/admin.ts
 init_supabase_server();
+init_middleware();
 import { Router as Router2 } from "express";
-
-// server/middleware.ts
-init_supabase_server();
-init_supabase_utils();
-import { createClient as createClient2 } from "@supabase/supabase-js";
-var SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-var SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-function getBearerToken(req) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
-  return authHeader.substring(7);
-}
-function createUserClient(req) {
-  const token = getBearerToken(req);
-  if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  return createClient2(normalizeSupabaseUrl(SUPABASE_URL), SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
-  });
-}
-async function getUserFromRequest(req) {
-  const client = createUserClient(req);
-  if (!client) return null;
-  const { data, error } = await client.auth.getUser();
-  if (error || !data.user) return null;
-  return data.user;
-}
-async function requireAuth(req, res, next) {
-  try {
-    const user = await getUserFromRequest(req);
-    if (!user) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    res.locals.user = user;
-    next();
-  } catch (error) {
-    console.error("Auth middleware error:", error);
-    res.status(500).json({ error: "Authentication failed" });
-  }
-}
-async function requireAdmin(req, res, next) {
-  try {
-    const user = await getUserFromRequest(req);
-    if (!user) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    const admin = await isUserAdmin(user.id);
-    if (!admin) {
-      res.status(403).json({ error: "Forbidden: Admin access required" });
-      return;
-    }
-    res.locals.user = user;
-    next();
-  } catch (error) {
-    console.error("Admin middleware error:", error);
-    res.status(500).json({ error: "Authorization check failed" });
-  }
-}
-
-// server/routes/admin.ts
 var adminBaseRouter = Router2();
 adminBaseRouter.get("/me", requireAuth, async (_req, res) => {
   try {
@@ -659,6 +672,24 @@ adminBaseRouter.get("/stats", requireAdmin, async (_req, res) => {
   } catch (error) {
     console.error("Error fetching admin stats:", error);
     res.status(500).json({ error: "Failed to fetch stats" });
+  }
+});
+adminBaseRouter.patch("/feedback/:id/status", requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const { status } = req.body ?? {};
+    const allowed = ["open", "planned", "in-progress", "done"];
+    if (!allowed.includes(status)) {
+      res.status(400).json({ error: "Invalid status. Must be one of: " + allowed.join(", ") });
+      return;
+    }
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("feedback_items").update({ status }).eq("id", id).select("id, status").single();
+    if (error) throw error;
+    res.json({ success: true, item: data });
+  } catch (error) {
+    console.error("Error updating feedback status:", error);
+    res.status(500).json({ error: error.message || "Failed to update feedback status" });
   }
 });
 var adminRouter = Router2();
@@ -1105,8 +1136,299 @@ adminUsersRouter.post("/:id/demote", requireAdmin, async (req, res) => {
   }
 });
 
-// server/routes/upload.ts
+// server/routes/analytics.ts
+init_supabase_server();
+init_middleware();
 import { Router as Router3 } from "express";
+var analyticsRouter = Router3();
+analyticsRouter.post("/events", async (req, res) => {
+  try {
+    const { sessionId, eventName, page, metadata, durationSeconds } = req.body ?? {};
+    if (!sessionId || typeof sessionId !== "string" || sessionId.length > 64) {
+      res.status(400).json({ error: "sessionId is required" });
+      return;
+    }
+    if (!eventName || typeof eventName !== "string" || eventName.length > 64) {
+      res.status(400).json({ error: "eventName is required" });
+      return;
+    }
+    let userId = null;
+    if (getBearerToken(req)) {
+      const user = await getUserFromRequest(req);
+      if (user) userId = user.id;
+    }
+    const supabase = createServerSupabase();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const isPageView = eventName === "page_view";
+    const duration = typeof durationSeconds === "number" && Number.isFinite(durationSeconds) ? Math.max(0, Math.round(durationSeconds)) : null;
+    const { data: existing } = await supabase.from("sessions").select("id, page_views").eq("id", sessionId).maybeSingle();
+    if (!existing) {
+      await supabase.from("sessions").insert({
+        id: sessionId,
+        user_id: userId,
+        started_at: now,
+        last_seen_at: now,
+        user_agent: String(req.headers["user-agent"] || "").slice(0, 300) || null,
+        referrer: String(req.headers.referer || "").slice(0, 500) || null,
+        page_views: isPageView ? 1 : 0,
+        duration_seconds: duration ?? 0
+      });
+    } else {
+      const update = {
+        last_seen_at: now,
+        user_id: userId,
+        // attach identity if the user logged in mid-session
+        page_views: (existing.page_views ?? 0) + (isPageView ? 1 : 0)
+      };
+      if (duration !== null) update.duration_seconds = duration;
+      await supabase.from("sessions").update(update).eq("id", sessionId);
+    }
+    await supabase.from("events").insert({
+      session_id: sessionId,
+      user_id: userId,
+      event_name: eventName,
+      page: typeof page === "string" ? page.slice(0, 200) : null,
+      metadata: metadata && typeof metadata === "object" ? metadata : {},
+      created_at: now
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Error recording event:", error);
+    res.json({ ok: true });
+  }
+});
+var adminAnalyticsRouter = Router3();
+adminAnalyticsRouter.use(requireAdmin);
+var FUNNELS = [
+  { name: "Discovery \u2192 Answer", steps: ["search_performed", "question_viewed", "answer_revealed"] },
+  { name: "Upload Flow", steps: ["upload_dialog_opened", "upload_submitted"] }
+];
+function daysAgoISO(days) {
+  return new Date(Date.now() - days * 864e5).toISOString();
+}
+async function fetchEvents(days) {
+  const supabase = createServerSupabase();
+  const { data, error } = await supabase.from("events").select("id, session_id, user_id, event_name, page, created_at").gte("created_at", daysAgoISO(days)).order("created_at", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+adminAnalyticsRouter.get("/overview", async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+    const supabase = createServerSupabase();
+    const since = daysAgoISO(days);
+    const [events, sessions] = await Promise.all([
+      fetchEvents(days),
+      supabase.from("sessions").select("duration_seconds").gte("last_seen_at", since)
+    ]);
+    const pageViews = events.filter((e) => e.event_name === "page_view").length;
+    const sessionIds = new Set(events.map((e) => e.session_id).filter(Boolean));
+    const userIds = new Set(events.map((e) => e.user_id).filter(Boolean));
+    const durations = (sessions.data ?? []).map((s) => s.duration_seconds ?? 0).filter((d) => d > 0);
+    const avgSessionDuration = durations.length ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : 0;
+    res.json({
+      sessions: sessionIds.size,
+      pageViews,
+      uniqueUsers: userIds.size,
+      avgSessionDuration,
+      totalEvents: events.length
+    });
+  } catch (error) {
+    console.error("Error loading analytics overview:", error);
+    res.status(500).json({ error: "Failed to load analytics" });
+  }
+});
+adminAnalyticsRouter.get("/series", async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+    const events = await fetchEvents(days);
+    const byDay = /* @__PURE__ */ new Map();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 864e5);
+      byDay.set(d.toISOString().slice(0, 10), { date: d.toISOString().slice(0, 10), pageViews: 0, events: 0, sessions: /* @__PURE__ */ new Set() });
+    }
+    for (const e of events) {
+      const day = e.created_at.slice(0, 10);
+      const row = byDay.get(day);
+      if (!row) continue;
+      row.events += 1;
+      if (e.event_name === "page_view") row.pageViews += 1;
+      if (e.session_id) row.sessions.add(e.session_id);
+    }
+    res.json(
+      [...byDay.values()].map((r) => ({ date: r.date, pageViews: r.pageViews, events: r.events, sessions: r.sessions.size }))
+    );
+  } catch (error) {
+    console.error("Error loading analytics series:", error);
+    res.status(500).json({ error: "Failed to load analytics" });
+  }
+});
+adminAnalyticsRouter.get("/pages", async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+    const events = await fetchEvents(days);
+    const counts = /* @__PURE__ */ new Map();
+    for (const e of events) {
+      if (e.event_name !== "page_view" || !e.page) continue;
+      counts.set(e.page, (counts.get(e.page) ?? 0) + 1);
+    }
+    res.json(
+      [...counts.entries()].map(([page, views]) => ({ page, views })).sort((a, b) => b.views - a.views).slice(0, 15)
+    );
+  } catch (error) {
+    console.error("Error loading analytics pages:", error);
+    res.status(500).json({ error: "Failed to load analytics" });
+  }
+});
+adminAnalyticsRouter.get("/events", async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+    const events = await fetchEvents(days);
+    const counts = /* @__PURE__ */ new Map();
+    for (const e of events) {
+      if (e.event_name === "page_view") continue;
+      counts.set(e.event_name, (counts.get(e.event_name) ?? 0) + 1);
+    }
+    res.json(
+      [...counts.entries()].map(([event, count]) => ({ event, count })).sort((a, b) => b.count - a.count).slice(0, 20)
+    );
+  } catch (error) {
+    console.error("Error loading analytics events:", error);
+    res.status(500).json({ error: "Failed to load analytics" });
+  }
+});
+adminAnalyticsRouter.get("/funnels", async (req, res) => {
+  try {
+    const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
+    const events = await fetchEvents(days);
+    const perSession = /* @__PURE__ */ new Map();
+    for (const e of events) {
+      if (!e.session_id) continue;
+      if (!perSession.has(e.session_id)) perSession.set(e.session_id, []);
+      perSession.get(e.session_id).push({ event: e.event_name, at: e.created_at });
+    }
+    const result = FUNNELS.map((funnel) => {
+      let reached = /* @__PURE__ */ new Set();
+      const steps = [];
+      funnel.steps.forEach((step, idx) => {
+        const next = /* @__PURE__ */ new Set();
+        for (const [sessionId, eventsList] of perSession) {
+          if (idx === 0) {
+            if (eventsList.some((e) => e.event === step)) next.add(sessionId);
+            continue;
+          }
+          const prevIdx = eventsList.findIndex((e) => e.event === funnel.steps[idx - 1]);
+          if (prevIdx === -1) continue;
+          if (eventsList.slice(prevIdx).some((e) => e.event === step)) next.add(sessionId);
+        }
+        const conversion = idx === 0 || reached.size === 0 ? null : next.size / reached.size;
+        reached = next;
+        steps.push({ event: step, sessions: reached.size, conversion });
+      });
+      return { name: funnel.name, steps };
+    });
+    res.json(result);
+  } catch (error) {
+    console.error("Error loading analytics funnels:", error);
+    res.status(500).json({ error: "Failed to load analytics" });
+  }
+});
+
+// server/routes/feedback.ts
+init_supabase_server();
+init_middleware();
+import { Router as Router4 } from "express";
+var feedbackRouter = Router4();
+feedbackRouter.get("/", async (req, res) => {
+  try {
+    const category = typeof req.query.category === "string" ? req.query.category : "";
+    const supabase = createServerSupabase();
+    let query = supabase.from("feedback_items").select("id, title, description, category, status, user_id, created_at").order("created_at", { ascending: false }).limit(200);
+    if (category) query = query.eq("category", category);
+    const { data: items, error } = await query;
+    if (error) throw error;
+    const rows = items ?? [];
+    if (rows.length === 0) {
+      res.json({ items: [] });
+      return;
+    }
+    const ids = rows.map((r) => r.id);
+    const { data: votes, error: votesError } = await supabase.from("feedback_votes").select("item_id, user_id").in("item_id", ids);
+    if (votesError) throw votesError;
+    const counts = /* @__PURE__ */ new Map();
+    const voterIds = /* @__PURE__ */ new Set();
+    for (const v of votes ?? []) {
+      counts.set(v.item_id, (counts.get(v.item_id) ?? 0) + 1);
+      voterIds.add(v.user_id);
+    }
+    let myVotes = /* @__PURE__ */ new Set();
+    const { getUserFromRequest: getUserFromRequest2, getBearerToken: getBearerToken2 } = await Promise.resolve().then(() => (init_middleware(), middleware_exports));
+    if (getBearerToken2(req)) {
+      const user = await getUserFromRequest2(req);
+      if (user && voterIds.size > 0) {
+        const { data: mine } = await supabase.from("feedback_votes").select("item_id").eq("user_id", user.id).in("item_id", ids);
+        myVotes = new Set((mine ?? []).map((v) => v.item_id));
+      }
+    }
+    const itemsWithVotes = rows.map((item) => ({
+      ...item,
+      votes: counts.get(item.id) ?? 0,
+      myVote: myVotes.has(item.id)
+    }));
+    itemsWithVotes.sort((a, b) => b.votes - a.votes);
+    res.json({ items: itemsWithVotes });
+  } catch (error) {
+    console.error("Error loading feedback:", error);
+    res.status(500).json({ error: "Failed to load feedback" });
+  }
+});
+feedbackRouter.post("/", requireAuth, async (req, res) => {
+  try {
+    const { title, description, category } = req.body ?? {};
+    const user = res.locals.user;
+    if (!title || typeof title !== "string" || title.trim().length < 5 || title.length > 160) {
+      res.status(400).json({ error: "Title must be between 5 and 160 characters" });
+      return;
+    }
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("feedback_items").insert({
+      title: title.trim(),
+      description: typeof description === "string" && description.trim() ? description.trim().slice(0, 2e3) : null,
+      category: typeof category === "string" && category.trim() ? category.trim().slice(0, 50) : "General",
+      user_id: user.id
+    }).select("id, title, description, category, status, user_id, created_at").single();
+    if (error) throw error;
+    res.status(201).json({ item: { ...data, votes: 0, myVote: false } });
+  } catch (error) {
+    console.error("Error creating feedback:", error);
+    res.status(500).json({ error: error.message || "Failed to create feedback" });
+  }
+});
+feedbackRouter.post("/:id/vote", requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const user = res.locals.user;
+    const supabase = createServerSupabase();
+    const { data: existing } = await supabase.from("feedback_votes").select("item_id").eq("item_id", id).eq("user_id", user.id).maybeSingle();
+    let voted;
+    if (existing) {
+      await supabase.from("feedback_votes").delete().eq("item_id", id).eq("user_id", user.id);
+      voted = false;
+    } else {
+      await supabase.from("feedback_votes").insert({ item_id: id, user_id: user.id });
+      voted = true;
+    }
+    const { count } = await supabase.from("feedback_votes").select("item_id", { count: "exact", head: true }).eq("item_id", id);
+    res.json({ voted, votes: count ?? 0 });
+  } catch (error) {
+    console.error("Error toggling feedback vote:", error);
+    res.status(500).json({ error: "Failed to update vote" });
+  }
+});
+
+// server/routes/upload.ts
+init_middleware();
+import { Router as Router5 } from "express";
 import multer from "multer";
 
 // src/lib/upload.ts
@@ -1415,7 +1737,7 @@ var upload = multer({
     files: 10
   }
 });
-var uploadRouter = Router3();
+var uploadRouter = Router5();
 uploadRouter.post("/", requireAuth, upload.any(), async (req, res) => {
   try {
     const user = res.locals.user;
@@ -1496,7 +1818,7 @@ uploadRouter.get("/", requireAuth, async (req, res) => {
 });
 
 // server/routes/payments.ts
-import { Router as Router4 } from "express";
+import { Router as Router6 } from "express";
 
 // src/lib/paystack.ts
 import crypto from "node:crypto";
@@ -1614,7 +1936,8 @@ var SUBSCRIPTION_PLANS = {
 
 // server/routes/payments.ts
 init_supabase_server();
-var paymentsRouter = Router4();
+init_middleware();
+var paymentsRouter = Router6();
 paymentsRouter.post("/initiate", requireAuth, async (req, res) => {
   try {
     const { tier } = req.body;
@@ -1768,14 +2091,14 @@ paymentsRouter.post("/webhook", async (req, res) => {
 });
 
 // server/routes/users.ts
-import { Router as Router5 } from "express";
+import { Router as Router7 } from "express";
 import { createClient as createClient3 } from "@supabase/supabase-js";
 init_supabase_utils();
 var serviceClient = createClient3(
   normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL),
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-var usersRouter = Router5();
+var usersRouter = Router7();
 var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 usersRouter.get("/:userId/uploads", async (req, res) => {
   const { userId } = req.params;
@@ -1799,8 +2122,9 @@ usersRouter.get("/:userId/uploads", async (req, res) => {
 
 // server/routes/subscription.ts
 init_supabase_server();
-import { Router as Router6 } from "express";
-var subscriptionRouter = Router6();
+init_middleware();
+import { Router as Router8 } from "express";
+var subscriptionRouter = Router8();
 subscriptionRouter.get("/", requireAuth, async (_req, res) => {
   try {
     const user = res.locals.user;
@@ -1818,9 +2142,9 @@ subscriptionRouter.get("/", requireAuth, async (_req, res) => {
 
 // server/routes/ai.ts
 init_process_question_document();
-import { Router as Router7 } from "express";
+import { Router as Router9 } from "express";
 import { z as z4 } from "zod";
-var aiRouter = Router7();
+var aiRouter = Router9();
 var ProcessDocumentBody = z4.object({
   fileUrl: z4.string().min(1, "fileUrl is required")
 });
@@ -1841,9 +2165,10 @@ aiRouter.post("/process-document", async (req, res) => {
 });
 
 // server/routes/lecturers.ts
-import { Router as Router8 } from "express";
+init_middleware();
 init_supabase_server();
-var lecturersRouter = Router8();
+import { Router as Router10 } from "express";
+var lecturersRouter = Router10();
 lecturersRouter.get("/", async (req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -1948,9 +2273,10 @@ lecturersRouter.get("/:id/questions", async (req, res) => {
 });
 
 // server/routes/lecturer-reviews.ts
-import { Router as Router9 } from "express";
+init_middleware();
 init_supabase_server();
-var lecturerReviewsRouter = Router9();
+import { Router as Router11 } from "express";
+var lecturerReviewsRouter = Router11();
 lecturerReviewsRouter.get("/lecturer/:lecturerId", async (req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -2028,9 +2354,10 @@ lecturerReviewsRouter.post("/:id/vote", requireAuth, async (req, res) => {
 });
 
 // server/routes/lecturer-flags.ts
-import { Router as Router10 } from "express";
+init_middleware();
 init_supabase_server();
-var lecturerFlagsRouter = Router10();
+import { Router as Router12 } from "express";
+var lecturerFlagsRouter = Router12();
 lecturerFlagsRouter.get("/", requireAdmin, async (_req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -2095,15 +2422,16 @@ lecturerFlagsRouter.patch("/:id/resolve", requireAdmin, async (req, res) => {
 });
 
 // server/routes/lecturer-photos.ts
-import { Router as Router11 } from "express";
-import multer2 from "multer";
+init_middleware();
 init_supabase_server();
+import { Router as Router13 } from "express";
+import multer2 from "multer";
 var upload2 = multer2({
   storage: multer2.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }
   // 5 MB
 });
-var lecturerPhotosRouter = Router11();
+var lecturerPhotosRouter = Router13();
 lecturerPhotosRouter.get("/lecturer/:lecturerId", async (req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -2207,6 +2535,9 @@ app.use("/api/questions", questionsRouter);
 app.use("/api/admin", adminBaseRouter);
 app.use("/api/admin/questions", adminRouter);
 app.use("/api/admin/users", adminUsersRouter);
+app.use("/api/admin/analytics", adminAnalyticsRouter);
+app.use("/api/events", analyticsRouter);
+app.use("/api/feedback", feedbackRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/users", usersRouter);

@@ -11,7 +11,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { questionsRouter } from './routes/questions';
-import { adminRouter } from './routes/admin';
+import { adminBaseRouter, adminRouter } from './routes/admin';
+import { analyticsRouter, adminAnalyticsRouter } from './routes/analytics';
+import { feedbackRouter } from './routes/feedback';
 import { uploadRouter } from './routes/upload';
 import { paymentsRouter } from './routes/payments';
 import { usersRouter } from './routes/users';
@@ -40,7 +42,11 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'jackpass-api', time: new Date().toISOString() });
 });
 app.use('/api/questions', questionsRouter);
+app.use('/api/admin', adminBaseRouter);
 app.use('/api/admin/questions', adminRouter);
+app.use('/api/admin/analytics', adminAnalyticsRouter);
+app.use('/api/events', analyticsRouter);
+app.use('/api/feedback', feedbackRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/users', usersRouter);

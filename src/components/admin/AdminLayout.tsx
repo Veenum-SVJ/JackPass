@@ -22,12 +22,14 @@ import { useAuth } from '@/contexts/AuthContext';import { LayoutDashboard,
   Shield,
   ArrowLeft,
   LogOut,
+  BarChart3,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 const navItems = [
   { title: 'Dashboard', icon: LayoutDashboard, href: '/admin/dashboard' },
   { title: 'Exam Papers', icon: FileQuestion, href: '/admin/questions' },
+  { title: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
   { title: 'Users', icon: Users, href: '/admin/users' },
 ];
 
