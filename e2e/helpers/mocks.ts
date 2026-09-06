@@ -307,6 +307,68 @@ export async function installMocks(page: Page, options: MockOptions = {}) {
     route.fulfill({ json: { success: true, item: { id: 'x', status: 'planned' } } })
   );
 
+  // Community forum (Discussions tab)
+  await page.route('**/api/forum', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({
+        status: 201,
+        json: {
+          post: {
+            id: 'new-post',
+            user_id: MOCK_USER_ID,
+            title: 'Created post',
+            description: 'A brand new discussion.',
+            category: 'General Discussions',
+            university: null,
+            course: null,
+            created_at: new Date().toISOString(),
+            author: 'Test Student',
+            votes: 0,
+            replies: 0,
+            myVote: false,
+          },
+        },
+      });
+    }
+    return route.fulfill({
+      json: {
+        posts: [
+          {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            user_id: null,
+            title: 'Anyone have the MTH 101 past questions from 2022?',
+            description: "I've been searching everywhere for the 2022 MTH 101 past questions. Can anyone help me out?",
+            category: 'Past Questions Requests',
+            university: 'University of Lagos',
+            course: 'MTH 101',
+            created_at: '2026-07-15T10:00:00.000Z',
+            author: 'John Doe',
+            votes: 12,
+            replies: 5,
+            myVote: false,
+          },
+          {
+            id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            user_id: null,
+            title: 'Struggling with CSC 404 (Advanced Algorithms)',
+            description: 'Does anyone have tips or resources for the final exams?',
+            category: 'Course Help',
+            university: 'University of Ibadan',
+            course: 'CSC 404',
+            created_at: '2026-07-14T10:00:00.000Z',
+            author: 'Jane Smith',
+            votes: 25,
+            replies: 12,
+            myVote: false,
+          },
+        ],
+      },
+    });
+  });
+  await page.route('**/api/forum/*/vote', (route) =>
+    route.fulfill({ json: { voted: true, votes: 13 } })
+  );
+
   // Weekly email digest (admin test send)
   await page.route('**/api/admin/digest/send*', (route) =>
     route.fulfill({

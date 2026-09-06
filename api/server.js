@@ -1459,9 +1459,181 @@ feedbackRouter.post("/:id/vote", requireAuth, async (req, res) => {
   }
 });
 
-// server/routes/upload.ts
+// server/routes/forum.ts
+init_supabase_server();
 init_middleware();
 import { Router as Router5 } from "express";
+var forumRouter = Router5();
+var CATEGORIES = [
+  "General Discussions",
+  "Course Help",
+  "Past Questions Requests",
+  "Study Tips",
+  "Faculty Groups",
+  "University-Specific Threads"
+];
+function isValidCategory(cat) {
+  return CATEGORIES.includes(cat);
+}
+forumRouter.get("/", async (req, res) => {
+  try {
+    const supabase = createServerSupabase();
+    const { university, course, category } = req.query;
+    let query = supabase.from("forum_posts").select("id, user_id, title, description, category, university, course, created_at").order("created_at", { ascending: false }).limit(100);
+    if (typeof university === "string" && university) query = query.eq("university", university);
+    if (typeof course === "string" && course) query = query.eq("course", course);
+    if (typeof category === "string" && category && isValidCategory(category)) query = query.eq("category", category);
+    const { data: rows2, error } = await query;
+    if (error) throw error;
+    const posts = rows2 ?? [];
+    if (posts.length === 0) {
+      res.json({ posts: [] });
+      return;
+    }
+    const ids = posts.map((p) => p.id);
+    const [votesRes, repliesRes] = await Promise.all([
+      supabase.from("forum_votes").select("post_id, user_id").in("post_id", ids),
+      supabase.from("forum_replies").select("post_id").in("post_id", ids)
+    ]);
+    if (votesRes.error) throw votesRes.error;
+    if (repliesRes.error) throw repliesRes.error;
+    const voteCounts = /* @__PURE__ */ new Map();
+    for (const v of votesRes.data ?? []) {
+      voteCounts.set(v.post_id, (voteCounts.get(v.post_id) ?? 0) + 1);
+    }
+    const replyCounts = /* @__PURE__ */ new Map();
+    for (const r of repliesRes.data ?? []) {
+      replyCounts.set(r.post_id, (replyCounts.get(r.post_id) ?? 0) + 1);
+    }
+    const authorIds = [...new Set(posts.map((p) => p.user_id).filter(Boolean))];
+    const names = /* @__PURE__ */ new Map();
+    if (authorIds.length) {
+      const { data: profiles } = await supabase.from("user_profiles").select("id, name").in("id", authorIds);
+      for (const prof of profiles ?? []) {
+        if (prof.name) names.set(prof.id, prof.name);
+      }
+    }
+    const myVoted = /* @__PURE__ */ new Set();
+    if (getBearerToken(req)) {
+      const user = await getUserFromRequest(req);
+      if (user) {
+        const { data: mine } = await supabase.from("forum_votes").select("post_id").eq("user_id", user.id).in("post_id", ids);
+        for (const m of mine ?? []) myVoted.add(m.post_id);
+      }
+    }
+    res.json({
+      posts: posts.map((p) => ({
+        ...p,
+        author: p.user_id ? names.get(p.user_id) ?? "Student" : "Anonymous",
+        votes: voteCounts.get(p.id) ?? 0,
+        replies: replyCounts.get(p.id) ?? 0,
+        myVote: myVoted.has(p.id)
+      }))
+    });
+  } catch (error) {
+    console.error("Error listing forum posts:", error);
+    res.status(500).json({ error: "Failed to load forum posts" });
+  }
+});
+forumRouter.post("/", requireAuth, async (req, res) => {
+  try {
+    const { title, description, category, university, course } = req.body ?? {};
+    const user = res.locals.user;
+    if (!title || typeof title !== "string" || title.trim().length < 5 || title.length > 200) {
+      res.status(400).json({ error: "Title must be between 5 and 200 characters" });
+      return;
+    }
+    const bodyText = typeof description === "string" ? description.trim() : "";
+    if (bodyText.length > 5e3) {
+      res.status(400).json({ error: "Description must be at most 5000 characters" });
+      return;
+    }
+    const cat = typeof category === "string" && isValidCategory(category) ? category : "General Discussions";
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("forum_posts").insert({
+      user_id: user.id,
+      title: title.trim(),
+      description: bodyText,
+      category: cat,
+      university: typeof university === "string" && university.trim() ? university.trim().slice(0, 120) : null,
+      course: typeof course === "string" && course.trim() ? course.trim().slice(0, 120) : null
+    }).select("id, user_id, title, description, category, university, course, created_at").single();
+    if (error) throw error;
+    res.status(201).json({ post: { ...data, author: "Student", votes: 0, replies: 0, myVote: false } });
+  } catch (error) {
+    console.error("Error creating forum post:", error);
+    res.status(500).json({ error: "Failed to create forum post" });
+  }
+});
+forumRouter.post("/:id/vote", requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const user = res.locals.user;
+    const supabase = createServerSupabase();
+    const { data: existing } = await supabase.from("forum_votes").select("post_id").eq("post_id", id).eq("user_id", user.id).maybeSingle();
+    let voted;
+    if (existing) {
+      await supabase.from("forum_votes").delete().eq("post_id", id).eq("user_id", user.id);
+      voted = false;
+    } else {
+      await supabase.from("forum_votes").insert({ post_id: id, user_id: user.id });
+      voted = true;
+    }
+    const { count } = await supabase.from("forum_votes").select("post_id", { count: "exact", head: true }).eq("post_id", id);
+    res.json({ voted, votes: count ?? 0 });
+  } catch (error) {
+    console.error("Error toggling forum vote:", error);
+    res.status(500).json({ error: "Failed to update vote" });
+  }
+});
+forumRouter.get("/:id/replies", async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const supabase = createServerSupabase();
+    const { data: rows2, error } = await supabase.from("forum_replies").select("id, post_id, user_id, body, created_at").eq("post_id", id).order("created_at", { ascending: true }).limit(200);
+    if (error) throw error;
+    const replies = rows2 ?? [];
+    const authorIds = [...new Set(replies.map((r) => r.user_id).filter(Boolean))];
+    const names = /* @__PURE__ */ new Map();
+    if (authorIds.length) {
+      const { data: profiles } = await supabase.from("user_profiles").select("id, name").in("id", authorIds);
+      for (const prof of profiles ?? []) {
+        if (prof.name) names.set(prof.id, prof.name);
+      }
+    }
+    res.json({
+      replies: replies.map((r) => ({
+        ...r,
+        author: r.user_id ? names.get(r.user_id) ?? "Student" : "Anonymous"
+      }))
+    });
+  } catch (error) {
+    console.error("Error listing forum replies:", error);
+    res.status(500).json({ error: "Failed to load replies" });
+  }
+});
+forumRouter.post("/:id/replies", requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const { body } = req.body ?? {};
+    const user = res.locals.user;
+    if (!body || typeof body !== "string" || body.trim().length < 1 || body.length > 2e3) {
+      res.status(400).json({ error: "Reply must be between 1 and 2000 characters" });
+      return;
+    }
+    const supabase = createServerSupabase();
+    const { data, error } = await supabase.from("forum_replies").insert({ post_id: id, user_id: user.id, body: body.trim() }).select("id, post_id, user_id, body, created_at").single();
+    if (error) throw error;
+    res.status(201).json({ reply: { ...data, author: "Student" } });
+  } catch (error) {
+    console.error("Error creating forum reply:", error);
+    res.status(500).json({ error: "Failed to create reply" });
+  }
+});
+
+// server/routes/upload.ts
+init_middleware();
+import { Router as Router6 } from "express";
 import multer from "multer";
 
 // src/lib/upload.ts
@@ -1770,7 +1942,7 @@ var upload = multer({
     files: 10
   }
 });
-var uploadRouter = Router5();
+var uploadRouter = Router6();
 uploadRouter.post("/", requireAuth, upload.any(), async (req, res) => {
   try {
     const user = res.locals.user;
@@ -1851,7 +2023,7 @@ uploadRouter.get("/", requireAuth, async (req, res) => {
 });
 
 // server/routes/payments.ts
-import { Router as Router6 } from "express";
+import { Router as Router7 } from "express";
 
 // src/lib/paystack.ts
 import crypto from "node:crypto";
@@ -1970,7 +2142,7 @@ var SUBSCRIPTION_PLANS = {
 // server/routes/payments.ts
 init_supabase_server();
 init_middleware();
-var paymentsRouter = Router6();
+var paymentsRouter = Router7();
 paymentsRouter.post("/initiate", requireAuth, async (req, res) => {
   try {
     const { tier } = req.body;
@@ -2124,9 +2296,9 @@ paymentsRouter.post("/webhook", async (req, res) => {
 });
 
 // server/routes/users.ts
-import { Router as Router7 } from "express";
+import { Router as Router8 } from "express";
 init_supabase_server();
-var usersRouter = Router7();
+var usersRouter = Router8();
 var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 usersRouter.get("/:userId/uploads", async (req, res) => {
   const { userId } = req.params;
@@ -2151,8 +2323,8 @@ usersRouter.get("/:userId/uploads", async (req, res) => {
 // server/routes/subscription.ts
 init_supabase_server();
 init_middleware();
-import { Router as Router8 } from "express";
-var subscriptionRouter = Router8();
+import { Router as Router9 } from "express";
+var subscriptionRouter = Router9();
 subscriptionRouter.get("/", requireAuth, async (_req, res) => {
   try {
     const user = res.locals.user;
@@ -2170,9 +2342,9 @@ subscriptionRouter.get("/", requireAuth, async (_req, res) => {
 
 // server/routes/ai.ts
 init_process_question_document();
-import { Router as Router9 } from "express";
+import { Router as Router10 } from "express";
 import { z as z4 } from "zod";
-var aiRouter = Router9();
+var aiRouter = Router10();
 var ProcessDocumentBody = z4.object({
   fileUrl: z4.string().min(1, "fileUrl is required")
 });
@@ -2195,8 +2367,8 @@ aiRouter.post("/process-document", async (req, res) => {
 // server/routes/lecturers.ts
 init_middleware();
 init_supabase_server();
-import { Router as Router10 } from "express";
-var lecturersRouter = Router10();
+import { Router as Router11 } from "express";
+var lecturersRouter = Router11();
 lecturersRouter.get("/", async (req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -2303,8 +2475,8 @@ lecturersRouter.get("/:id/questions", async (req, res) => {
 // server/routes/lecturer-reviews.ts
 init_middleware();
 init_supabase_server();
-import { Router as Router11 } from "express";
-var lecturerReviewsRouter = Router11();
+import { Router as Router12 } from "express";
+var lecturerReviewsRouter = Router12();
 lecturerReviewsRouter.get("/lecturer/:lecturerId", async (req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -2384,8 +2556,8 @@ lecturerReviewsRouter.post("/:id/vote", requireAuth, async (req, res) => {
 // server/routes/lecturer-flags.ts
 init_middleware();
 init_supabase_server();
-import { Router as Router12 } from "express";
-var lecturerFlagsRouter = Router12();
+import { Router as Router13 } from "express";
+var lecturerFlagsRouter = Router13();
 lecturerFlagsRouter.get("/", requireAdmin, async (_req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -2452,14 +2624,14 @@ lecturerFlagsRouter.patch("/:id/resolve", requireAdmin, async (req, res) => {
 // server/routes/lecturer-photos.ts
 init_middleware();
 init_supabase_server();
-import { Router as Router13 } from "express";
+import { Router as Router14 } from "express";
 import multer2 from "multer";
 var upload2 = multer2({
   storage: multer2.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }
   // 5 MB
 });
-var lecturerPhotosRouter = Router13();
+var lecturerPhotosRouter = Router14();
 lecturerPhotosRouter.get("/lecturer/:lecturerId", async (req, res) => {
   try {
     const supabase = createServerSupabase();
@@ -2548,7 +2720,7 @@ lecturerPhotosRouter.post("/:id/upvote", requireAuth, async (req, res) => {
 
 // server/routes/cron.ts
 init_supabase_server();
-import { Router as Router14 } from "express";
+import { Router as Router15 } from "express";
 
 // src/lib/digest-email.ts
 function esc(s) {
@@ -2669,7 +2841,7 @@ async function sendDigest({ to, start, end, days }) {
   console.log(`Digest email sent to ${to.length} recipient(s), id=${id}, window=${start}..${end}`);
   return id;
 }
-var cronRouter = Router14();
+var cronRouter = Router15();
 cronRouter.post("/weekly-digest", async (req, res) => {
   const auth = req.headers.authorization || "";
   const expected = `Bearer ${process.env.CRON_SECRET || ""}`;
@@ -2710,7 +2882,7 @@ cronRouter.post("/weekly-digest", async (req, res) => {
     res.status(500).json({ error: error.message || "Digest failed" });
   }
 });
-var adminDigestRouter = Router14();
+var adminDigestRouter = Router15();
 adminDigestRouter.use(requireAdmin);
 adminDigestRouter.post("/send", async (req, res) => {
   try {
@@ -2751,6 +2923,7 @@ app.use("/api/admin/users", adminUsersRouter);
 app.use("/api/admin/analytics", adminAnalyticsRouter);
 app.use("/api/events", analyticsRouter);
 app.use("/api/feedback", feedbackRouter);
+app.use("/api/forum", forumRouter);
 app.use("/api/upload", uploadRouter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/users", usersRouter);
