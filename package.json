@@ -9,7 +9,7 @@
     "dev:server": "tsx watch server/index.ts",
     "genkit:dev": "genkit start -- tsx server/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch server/ai/dev.ts",
-    "bundle:api": "esbuild api/_server.ts --bundle --platform=node --format=esm --outfile=api/server.js --external:express --external:@supabase/* --external:@genkit-ai/* --external:genkit --external:multer --external:zod --external:uuid --external:dotenv --external:node-fetch",
+    "bundle:api": "esbuild api/_server.ts --bundle --platform=node --format=esm --outfile=api/server.js --external:express --external:@supabase/* --external:@genkit-ai/* --external:genkit --external:multer --external:zod --external:uuid --external:dotenv --external:node-fetch --external:debug",
     "build": "npm run bundle:api && tsc --noEmit && vite build",
     "preview": "vite preview",
     "start": "tsx server/index.ts",
