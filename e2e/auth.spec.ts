@@ -2,14 +2,33 @@ import { test, expect } from '@playwright/test';
 import { installMocks } from './helpers/mocks';
 
 test.describe('login (OAuth)', () => {
-  test('shows Google and Apple sign-in buttons and no password form', async ({ page }) => {
+  test('shows Google and Apple sign-in buttons with the password form hidden', async ({ page }) => {
     await installMocks(page);
     await page.goto('/login');
 
     await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Continue with Apple' })).toBeVisible();
-    // The email/password form is gone
+    // The email/password fallback exists but is collapsed behind a link
     await expect(page.getByPlaceholder('m@example.com')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Login', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Sign in with email/ })).toBeVisible();
+  });
+
+  // Pre-OAuth accounts must not be locked out of the UI, so the OAuth-first card
+  // still offers a way back to email/password sign-in.
+  test('reveals the email/password form for accounts created before OAuth', async ({ page }) => {
+    await installMocks(page);
+    await page.goto('/login');
+
+    await page.getByRole('button', { name: /Sign in with email/ }).click();
+    await expect(page.getByPlaceholder('m@example.com')).toBeVisible();
+
+    await page.getByLabel('Email').fill('legacy@example.com');
+    await page.getByLabel('Password').fill('correct-password');
+    await page.getByRole('button', { name: 'Login', exact: true }).click();
+
+    // The mocked signInWithPassword session is accepted, so the form is gone.
+    await expect(page).not.toHaveURL(/\/login/);
     await expect(page.getByRole('button', { name: 'Login', exact: true })).toHaveCount(0);
   });
 
